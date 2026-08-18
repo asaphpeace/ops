@@ -1,0 +1,34 @@
+# Environment
+.env
+.env.local
+
+# Dev journal (personal working log)
+.dev-journal.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+frontend/dist/
+
+# Docker volumes / local data
+backups/
+postgres-data/
+
+# Alembic
+backend/alembic/versions/*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

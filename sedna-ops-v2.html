@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sedna Ops</title>
+<style>
+:root {
+  --bg:#080d17;--surface:#0f1623;--surface2:#162035;--surface3:#1c2a45;
+  --border:#1a2640;--border2:#243350;--text:#dde5f4;--text2:#7d9abf;--text3:#3d5475;
+  --accent:#3b7ff5;--accent-dim:rgba(59,127,245,0.12);
+  --green:#0fba81;--green-dim:rgba(15,186,129,0.1);
+  --amber:#f0a030;--amber-dim:rgba(240,160,48,0.1);
+  --red:#e8445a;--red-dim:rgba(232,68,90,0.1);
+  --purple:#9b6cf5;--purple-dim:rgba(155,108,245,0.1);
+  --teal:#0bc5ea;--teal-dim:rgba(11,197,234,0.1);
+  --gold:#f0a030;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;font-size:13px;line-height:1.5;min-height:100vh;display:flex}
+
+/* SIDEBAR */
+.sidebar{width:52px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:2px;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.logo{width:30px;height:30px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;margin-bottom:14px;letter-spacing:-.05em}
+.nb{width:38px;height:38px;border:none;background:transparent;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:all .15s;position:relative;font-size:15px}
+.nb:hover{background:var(--surface2);color:var(--text2)}
+.nb.active{background:var(--accent-dim);color:var(--accent)}
+.nb .tip{position:absolute;left:48px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:3px 9px;border-radius:5px;white-space:nowrap;font-size:10px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .15s;z-index:200}
+.nb:hover .tip{opacity:1}
+.nb-divider{width:24px;height:1px;background:var(--border);margin:6px 0}
+
+/* MAIN */
+.main{margin-left:52px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* TOPBAR */
+.topbar{height:50px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.topbar-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.spill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:10px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:default}
+.spill .dot{width:5px;height:5px;border-radius:50%}
+
+/* VIEWS */
+.view{display:none;padding:20px}
+.view.active{display:block}
+
+/* TYPOGRAPHY */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.sh h2{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.sh p{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* STAT ROWS */
+.stats-row{display:grid;gap:10px;margin-bottom:20px}
+.sr-5{grid-template-columns:repeat(5,1fr)}
+.sr-4{grid-template-columns:repeat(4,1fr)}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:13px 15px}
+.sc .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:700;margin-bottom:5px}
+.sc .val{font-size:22px;font-weight:800;letter-spacing:-.04em;color:var(--text);line-height:1}
+.sc .sub{font-size:9px;color:var(--text3);margin-top:3px}
+.sc.warn{border-color:rgba(240,160,48,.25)}.sc.warn .val{color:var(--amber)}
+.sc.alert{border-color:rgba(232,68,90,.25)}.sc.alert .val{color:var(--red)}
+.sc.good{border-color:rgba(15,186,129,.25)}.sc.good .val{color:var(--green)}
+.sc.info{border-color:rgba(59,127,245,.25)}.sc.info .val{color:var(--accent)}
+
+/* BADGES */
+.env-badge{font-size:8px;font-weight:800;padding:2px 5px;border-radius:3px;letter-spacing:.06em}
+.ep{background:var(--red-dim);color:var(--red);border:1px solid rgba(232,68,90,.25)}
+.et{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(240,160,48,.25)}
+.ed{background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
+.tier-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px}
+.tp{background:rgba(240,160,48,.15);color:var(--gold)}
+.ts{background:var(--purple-dim);color:var(--purple)}
+.tsc{background:var(--accent-dim);color:var(--accent)}
+.type-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px}
+.type-s{background:var(--green-dim);color:var(--green)}
+.type-c{background:var(--amber-dim);color:var(--amber)}
+.type-m{background:var(--teal-dim);color:var(--teal)}
+.infra-badge{font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px}
+.io{background:var(--red-dim);color:var(--red)}
+.in{background:var(--green-dim);color:var(--green)}
+.im{background:var(--amber-dim);color:var(--amber)}
+.health-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hg{background:var(--green)}.ha{background:var(--amber)}.hr{background:var(--red)}
+.flag-pill{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em}
+.fip{background:var(--red-dim);color:var(--red)}
+.fup{background:var(--amber-dim);color:var(--amber)}
+.fst{background:rgba(232,68,90,.08);color:var(--red);border:1px solid rgba(232,68,90,.25)}
+.priority-h{background:var(--red-dim);color:var(--red);font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px}
+.priority-m{background:var(--amber-dim);color:var(--amber);font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px}
+.priority-l{background:var(--green-dim);color:var(--green);font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px}
+
+/* BUTTONS */
+.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-g{background:var(--surface2);border:1px solid var(--border2);color:var(--text2)}
+.btn-red{background:var(--red-dim);border:1px solid rgba(232,68,90,.3);color:var(--red)}
+.btn-green{background:var(--green-dim);border:1px solid rgba(15,186,129,.3);color:var(--green)}
+.btn-sm{padding:4px 8px;font-size:10px}
+
+/* INPUTS */
+.inp{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;outline:none;width:100%}
+.inp:focus{border-color:var(--accent)}
+.inp::placeholder{color:var(--text3)}
+.sel{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;color:var(--text2);font-size:11px;outline:none;cursor:pointer}
+
+/* ALERTS */
+.alert-bar{background:var(--red-dim);border:1px solid rgba(232,68,90,.3);border-radius:8px;padding:9px 13px;margin-bottom:14px;display:flex;align-items:center;gap:9px;font-size:11px;color:var(--red)}
+.info-bar{background:var(--accent-dim);border:1px solid rgba(59,127,245,.25);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:11px;color:#93c5fd}
+.amber-bar{background:var(--amber-dim);border:1px solid rgba(240,160,48,.25);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:11px;color:var(--amber)}
+
+/* PIPELINE BOARD */
+.pb{display:grid;gap:10px;margin-bottom:20px}
+.pb-5{grid-template-columns:repeat(5,1fr)}
+.pb-8{grid-template-columns:repeat(8,1fr);overflow-x:auto}
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;min-width:155px}
+.pc-h{padding:9px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.pc-h .cn{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
+.cb{font-size:9px;font-weight:700;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1px 6px;color:var(--text3)}
+.pcards{padding:8px;display:flex;flex-direction:column;gap:7px;min-height:70px}
+
+/* UPGRADE CARDS */
+.uc{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:9px 11px;cursor:pointer;transition:border-color .15s,transform .1s}
+.uc:hover{border-color:var(--accent);transform:translateY(-1px)}
+.uc.blocked{border-color:rgba(232,68,90,.4);background:rgba(232,68,90,.03)}
+.uc .ct{display:flex;align-items:center;gap:5px;margin-bottom:5px;flex-wrap:wrap}
+.uc .cc{font-size:11px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uc .cv{font-size:10px;color:var(--text3);font-family:'SF Mono',monospace;margin-bottom:5px}
+.uc .cv span{color:var(--accent)}
+.uc .cf{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.jp{font-size:9px;color:var(--text3);background:var(--surface3);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;font-family:monospace;cursor:pointer}
+.jp:hover{color:var(--accent);border-color:var(--accent)}
+.bw{font-size:9px;color:var(--red);background:var(--red-dim);border-radius:3px;padding:2px 6px;margin-top:4px;display:flex;align-items:center;gap:3px}
+
+/* HEALTH CARD */
+.hc-mini{display:flex;align-items:center;gap:6px}
+.hc-score{font-size:11px;font-weight:700}
+
+/* TABLE */
+.tw{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ttb{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:800;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:9px 12px;font-size:11px;color:var(--text2);vertical-align:middle}
+.td-name{font-weight:700;color:var(--text);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vm{font-family:'SF Mono',monospace;font-size:10px}
+
+/* UPGRADE BAR */
+.ub{display:flex;align-items:center;gap:5px}
+.bt{width:44px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.bf{height:100%;border-radius:2px;background:var(--green)}
+.bf.wa{background:var(--amber)}.bf.da{background:var(--red)}
+
+/* WEEK CAL */
+.wc{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:20px}
+.wc-h{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--border)}
+.dc-h{padding:9px 12px;border-right:1px solid var(--border);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
+.dc-h:last-child{border-right:none}
+.dc-h .t{color:var(--text3);font-weight:400;font-size:9px;display:block;margin-top:1px}
+.wc-b{display:grid;grid-template-columns:repeat(5,1fr)}
+.dc{border-right:1px solid var(--border);padding:8px;min-height:90px;display:flex;flex-direction:column;gap:5px}
+.dc:last-child{border-right:none}
+.cs{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:6px 8px}
+.cs.unc{border-color:rgba(240,160,48,.4);background:rgba(240,160,48,.03)}
+.cs .sn{font-weight:700;color:var(--text);font-size:11px}
+.cs .sd{color:var(--text3);font-size:9px;font-family:monospace}
+.ce{border:1px dashed var(--border);border-radius:6px;height:34px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text3);cursor:pointer}
+.ce:hover{border-color:var(--accent);color:var(--accent)}
+
+/* DETAIL PANEL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150}
+.overlay.open{display:block}
+.dp{display:none;position:fixed;top:0;right:0;bottom:0;width:580px;background:var(--surface);border-left:1px solid var(--border);z-index:200;overflow-y:auto;box-shadow:-24px 0 60px rgba(0,0,0,.6)}
+.dp.open{display:block}
+.dp-h{padding:18px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:10}
+.dp-h h3{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.02em;margin-bottom:5px}
+.dp-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 22px;background:var(--surface);overflow-x:auto}
+.dt{padding:9px 12px;font-size:10px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;white-space:nowrap}
+.dt.active{color:var(--accent);border-bottom-color:var(--accent)}
+.dt:hover{color:var(--text2)}
+.dp-body{padding:18px 22px}
+.ds{margin-bottom:18px}
+.ds h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:800;margin-bottom:9px}
+.ec{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:11px 13px;margin-bottom:7px}
+.ec-h{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.fr{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:10px;color:var(--text2)}
+.fon{color:var(--green);font-size:9px;font-weight:800}
+.fof{color:var(--text3);font-size:9px}
+.cbx{position:absolute;top:18px;right:18px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:13px}
+.cbx:hover{color:var(--text)}
+.jr{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 11px;margin-bottom:5px;display:flex;align-items:center;gap:9px}
+.jref{font-family:monospace;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap;cursor:pointer}
+.jtitle{font-size:11px;color:var(--text);flex:1}
+.jst{font-size:9px;color:var(--text3);white-space:nowrap}
+
+/* QUEUE */
+.qi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px;cursor:pointer;transition:border-color .15s}
+.qi:hover{border-color:var(--accent)}
+.qi.sla-red{border-color:rgba(232,68,90,.4)}
+.qi.sla-amber{border-color:rgba(240,160,48,.35)}
+.qi-left{flex:1}
+.qi-customer{font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px}
+.qi-summary{font-size:11px;color:var(--text2);margin-bottom:5px}
+.qi-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.qi-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;min-width:90px}
+.sla-timer{font-size:10px;font-weight:700;font-family:monospace}
+.sla-g{color:var(--green)}.sla-a{color:var(--amber)}.sla-r{color:var(--red)}
+
+/* MIGRATION CARDS */
+.mc{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:8px 10px;cursor:pointer;transition:border-color .15s}
+.mc:hover{border-color:var(--teal)}
+.mc .mn{font-size:10px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc .mm{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px}
+.mc .mv{font-size:9px;font-family:monospace;color:var(--text3)}
+.mc .ma{font-size:9px;color:var(--text3);margin-top:2px}
+
+/* TRENDS */
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:15px 17px}
+.tc h4{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);margin-bottom:13px}
+.vbr{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.vl{font-family:monospace;font-size:10px;color:var(--text2);width:58px;flex-shrink:0}
+.vt{flex:1;height:18px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.vf{height:100%;border-radius:3px;display:flex;align-items:center;padding:0 7px;font-size:9px;font-weight:700;color:#fff}
+.v-old{background:linear-gradient(90deg,#e8445a,#f07080)}
+.v-mid{background:linear-gradient(90deg,#f0a030,#f5c060)}
+.v-new{background:linear-gradient(90deg,#0fba81,#30d4a0)}
+.tli{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px}
+.tli:last-child{border-bottom:none}
+.tli-n{color:var(--text);font-weight:600}
+
+/* TIMELINE */
+.tl-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tl-item:last-child{border-bottom:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.tl-content .tl-what{font-size:11px;color:var(--text);font-weight:600;margin-bottom:2px}
+.tl-content .tl-when{font-size:9px;color:var(--text3)}
+
+/* RELEASE */
+.ric{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.ri-ver{font-size:14px;font-weight:800;color:var(--accent);font-family:monospace;margin-bottom:4px}
+.ri-meta{font-size:10px;color:var(--text3);margin-bottom:8px}
+.ri-impact{font-size:11px;color:var(--text2)}
+
+/* EDUCATION */
+.gap-bar{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.gap-label{font-size:10px;color:var(--text2);width:140px;flex-shrink:0}
+.gap-track{flex:1;height:14px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.gap-fill{height:100%;background:var(--purple);border-radius:3px;display:flex;align-items:center;padding:0 6px;font-size:8px;font-weight:700;color:#fff}
+
+/* DIVIDER */
+.divider{height:1px;background:var(--border);margin:16px 0}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="logo">SO</div>
+  <button class="nb active" onclick="sv('triage')" id="nav-triage">⚡<span class="tip">Triage Queue</span></button>
+  <button class="nb" onclick="sv('command')" id="nav-command">⊞<span class="tip">Command Centre</span></button>
+  <div class="nb-divider"></div>
+  <button class="nb" onclick="sv('customers')" id="nav-customers">◎<span class="tip">Customers</span></button>
+  <button class="nb" onclick="sv('migration')" id="nav-migration">⇉<span class="tip">Migration</span></button>
+  <div class="nb-divider"></div>
+  <button class="nb" onclick="sv('releases')" id="nav-releases">◈<span class="tip">Releases</span></button>
+  <button class="nb" onclick="sv('education')" id="nav-education">✦<span class="tip">Education</span></button>
+  <button class="nb" onclick="sv('trends')" id="nav-trends">∿<span class="tip">Trends</span></button>
+</nav>
+
+<div class="main">
+<div class="topbar">
+  <div><div class="topbar-title" id="tt">Triage Queue</div><div class="topbar-sub" id="ts">Your L2 operational hub · Tue 18 Aug 2026</div></div>
+  <div class="topbar-right">
+    <div class="spill"><div class="dot" style="background:var(--red)"></div>4 SLA breaching</div>
+    <div class="spill"><div class="dot" style="background:var(--amber)"></div>3 awaiting dev</div>
+    <div class="spill"><div class="dot" style="background:var(--green)"></div>2 done today</div>
+    <button class="btn btn-g btn-sm" onclick="sv('snapshot')">📋 Snapshot</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- TRIAGE QUEUE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view active" id="view-triage">
+  <div class="stats-row sr-5">
+    <div class="sc alert"><div class="lbl">SLA Breaching</div><div class="val">4</div><div class="sub">Premier: 1 · Strategic: 2 · Scale: 1</div></div>
+    <div class="sc warn"><div class="lbl">Awaiting Dev</div><div class="val">7</div><div class="sub">avg 8.3 days waiting</div></div>
+    <div class="sc warn"><div class="lbl">Awaiting Customer</div><div class="val">5</div><div class="sub">2 over 3 days</div></div>
+    <div class="sc good"><div class="lbl">Resolved Today</div><div class="val">2</div><div class="sub">+1 vs yesterday</div></div>
+    <div class="sc"><div class="lbl">Total Active</div><div class="val">23</div><div class="sub">across all types</div></div>
+  </div>
+
+  <div class="alert-bar">⊘ DSD-31701 (Ardmore Shipping PROD upgrade) is blocked — linked test DSD-31698 not confirmed complete. Prod card frozen.</div>
+
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <input class="inp" style="width:200px" placeholder="Search queue...">
+    <select class="sel"><option>All types</option><option>Upgrade Request</option><option>Defect</option><option>Support</option><option>Training Gap</option></select>
+    <select class="sel"><option>All statuses</option><option>Active</option><option>Awaiting Dev</option><option>Awaiting Customer</option><option>Awaiting DevOps</option></select>
+    <select class="sel"><option>All tiers</option><option>Premier</option><option>Strategic</option><option>Scale</option></select>
+    <button class="btn btn-g btn-sm" style="margin-left:auto">+ New Case</button>
+  </div>
+
+  <!-- SLA BREACHING -->
+  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--red);margin-bottom:8px">⚠ SLA Breaching</div>
+
+  <div class="qi sla-red" onclick="oc('nat')">
+    <div class="health-dot hr"></div>
+    <div class="qi-left">
+      <div class="qi-customer">NAT Chartering AS <span class="tier-badge ts">Strategic</span></div>
+      <div class="qi-summary">DSD-31667 — TC rate calculation off on Worldscale voyages</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--red-dim);color:var(--red)">Defect</span>
+        <span class="env-badge ep">PROD</span>
+        <span class="vm" style="color:var(--text3)">8.14.2-R</span>
+        <span style="font-size:9px;color:var(--text3)">Awaiting Dev · last update 12d ago</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <span class="sla-timer sla-r">12d 4h</span>
+      <span style="font-size:9px;color:var(--text3)">SLA: 10d</span>
+      <button class="btn btn-sm btn-red" onclick="event.stopPropagation()">Chase Dev</button>
+    </div>
+  </div>
+
+  <div class="qi sla-red" onclick="oc('bbc')">
+    <div class="health-dot ha"></div>
+    <div class="qi-left">
+      <div class="qi-customer">BBC Chartering GmbH <span class="tier-badge tp">Premier</span></div>
+      <div class="qi-summary">DSD-31690 — Voyage calculation defect on multi-port cargo</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--red-dim);color:var(--red)">Defect</span>
+        <span class="env-badge ep">PROD</span>
+        <span class="vm" style="color:var(--text3)">8.28.1-R</span>
+        <span style="font-size:9px;color:var(--text3)">Awaiting Dev · last update 6d ago</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <span class="sla-timer sla-r">6d 2h</span>
+      <span style="font-size:9px;color:var(--text3)">SLA: 5d</span>
+      <button class="btn btn-sm btn-red" onclick="event.stopPropagation()">Chase Dev</button>
+    </div>
+  </div>
+
+  <!-- ACTIVE -->
+  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin:14px 0 8px">Active</div>
+
+  <div class="qi" onclick="oc('balena')">
+    <div class="health-dot ha"></div>
+    <div class="qi-left">
+      <div class="qi-customer">Balena Shipping DMCC <span class="tier-badge ts">Strategic</span></div>
+      <div class="qi-summary">DSD-31692 — Sedna VMS upgrade request · PROD to 8.30.1</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--accent-dim);color:var(--accent)">Upgrade</span>
+        <span class="env-badge ep">PROD</span>
+        <span class="vm" style="color:var(--text3)">8.25.3-R</span>
+        <span style="font-size:9px;color:var(--green)">DevOps approved</span>
+        <span style="font-size:9px;color:var(--amber)">⚠ Awaiting customer confirm</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <span class="sla-timer sla-g">2d 6h</span>
+      <span style="font-size:9px;color:var(--text3)">SLA: 10d</span>
+      <button class="btn btn-sm btn-green" onclick="event.stopPropagation()">Draft Confirm</button>
+    </div>
+  </div>
+
+  <div class="qi" onclick="oc('bbc')">
+    <div class="health-dot ha"></div>
+    <div class="qi-left">
+      <div class="qi-customer">BBC Chartering GmbH <span class="tier-badge tp">Premier</span></div>
+      <div class="qi-summary">DSD-31683 — User unable to post invoice after period close</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--surface3);color:var(--text3)">Support</span>
+        <span class="env-badge ep">PROD</span>
+        <span style="font-size:9px;color:var(--amber)">Awaiting customer · 2d</span>
+        <span style="font-size:9px;color:var(--text3)">Possible config issue</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <span class="sla-timer sla-a">3d 1h</span>
+      <span style="font-size:9px;color:var(--text3)">SLA: 5d</span>
+      <button class="btn btn-sm btn-g" onclick="event.stopPropagation()">Follow up</button>
+    </div>
+  </div>
+
+  <div class="qi" onclick="oc('nat')">
+    <div class="health-dot hr"></div>
+    <div class="qi-left">
+      <div class="qi-customer">NAT Chartering AS <span class="tier-badge ts">Strategic</span></div>
+      <div class="qi-summary">DSD-31688 — Upgrade TEST to 8.30.1 first · complex upgrade</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--accent-dim);color:var(--accent)">Upgrade</span>
+        <span class="env-badge et">TEST</span>
+        <span class="type-badge type-c">Complex</span>
+        <span class="vm" style="color:var(--red)">8.14.2-R</span>
+        <span style="font-size:9px;color:var(--amber)">Awaiting DevOps priority list</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <span class="sla-timer sla-a">4d 8h</span>
+      <span style="font-size:9px;color:var(--text3)">SLA: 10d</span>
+      <button class="btn btn-sm btn-g" onclick="event.stopPropagation()">Add to DevOps</button>
+    </div>
+  </div>
+
+  <!-- TRAINING GAP -->
+  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--purple);margin:14px 0 8px">Training Gaps Identified</div>
+  <div class="qi" onclick="oc('bbc')">
+    <div class="health-dot ha"></div>
+    <div class="qi-left">
+      <div class="qi-customer">BBC Chartering GmbH <span class="tier-badge tp">Premier</span></div>
+      <div class="qi-summary">DSD-31683 root cause: user unfamiliar with period-end closing workflow</div>
+      <div class="qi-meta">
+        <span class="flag-pill" style="background:var(--purple-dim);color:var(--purple)">Training Gap</span>
+        <span style="font-size:9px;color:var(--text3)">Area: Finance · Period-End Closing</span>
+        <span style="font-size:9px;color:var(--purple)">2nd gap this month</span>
+      </div>
+    </div>
+    <div class="qi-right">
+      <button class="btn btn-sm" style="background:var(--purple-dim);color:var(--purple);border:1px solid rgba(155,108,245,.3)" onclick="event.stopPropagation()">Log Gap</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- COMMAND CENTRE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-command">
+  <div class="stats-row sr-5">
+    <div class="sc"><div class="lbl">Active Upgrades</div><div class="val">14</div><div class="sub">across all stages</div></div>
+    <div class="sc alert"><div class="lbl">Blocked</div><div class="val">2</div><div class="sub">prod before test confirmed</div></div>
+    <div class="sc warn"><div class="lbl">Unconfirmed Slots</div><div class="val">3</div><div class="sub">awaiting customer</div></div>
+    <div class="sc good"><div class="lbl">Done This Month</div><div class="val">9</div><div class="sub">↑ vs 6 last month</div></div>
+    <div class="sc info"><div class="lbl">DevOps Queue</div><div class="val">6</div><div class="sub">items waiting Elias/Martin</div></div>
+  </div>
+
+  <div class="alert-bar">⊘ 2 PROD upgrade cards frozen — linked TEST environments not confirmed complete. DSD-31701 (Ardmore) · DSD-31694 (Augustea)</div>
+
+  <div class="sh"><div><h2>Upgrade Pipeline</h2><p>Customer-first · all stages</p></div><button class="btn">+ New Upgrade</button></div>
+
+  <div class="pb pb-5">
+    <div class="pc"><div class="pc-h"><span class="cn">Requested</span><span class="cb">3</span></div>
+    <div class="pcards">
+      <div class="uc" onclick="oc('bbc')">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span><div class="health-dot ha" style="margin-left:auto"></div></div>
+        <div class="cc">BBC Chartering</div><div class="cv">8.28.1 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31705</span><span class="tier-badge tp">Premier</span></div>
+      </div>
+      <div class="uc" onclick="oc('balena')">
+        <div class="ct"><span class="env-badge et">TEST</span><span class="type-badge type-s">Small</span><div class="health-dot ha" style="margin-left:auto"></div></div>
+        <div class="cc">Balena Shipping</div><div class="cv">8.25.3 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31692</span><span class="tier-badge ts">Strategic</span></div>
+      </div>
+      <div class="uc" onclick="oc('nat')">
+        <div class="ct"><span class="env-badge et">TEST</span><span class="type-badge type-c">Complex</span><div class="health-dot hr" style="margin-left:auto"></div></div>
+        <div class="cc">NAT Chartering</div><div class="cv" style="color:var(--red)">8.14.2 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31688</span><span class="tier-badge ts">Strategic</span></div>
+      </div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">DevOps Approval</span><span class="cb">4</span></div>
+    <div class="pcards">
+      <div class="uc blocked">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span></div>
+        <div class="cc">Augustea Holding</div><div class="cv">8.27.1 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31694</span><span class="tier-badge ts">Strategic</span></div>
+        <div class="bw">⊘ Test not confirmed · DSD-31690</div>
+      </div>
+      <div class="uc blocked">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span></div>
+        <div class="cc">Ardmore Shipping</div><div class="cv">8.26.0 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31701</span><span class="tier-badge tsc">Scale</span></div>
+        <div class="bw">⊘ Test not confirmed · DSD-31698</div>
+      </div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Cust. Confirmed</span><span class="cb">3</span></div>
+    <div class="pcards">
+      <div class="uc" onclick="oc('bp')">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span><div class="health-dot hg" style="margin-left:auto"></div></div>
+        <div class="cc">BP Oil International</div><div class="cv">8.29.0 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31703</span><span class="tier-badge tp">Premier</span></div>
+      </div>
+      <div class="uc">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span></div>
+        <div class="cc">BainBridge Navigation</div><div class="cv">8.29.0 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31696</span><span class="tier-badge ts">Strategic</span></div>
+      </div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Scheduled</span><span class="cb">2</span></div>
+    <div class="pcards">
+      <div class="uc">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span></div>
+        <div class="cc">Banchero Costa</div><div class="cv">8.29.1 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31695</span><span class="tier-badge tp">Premier</span></div>
+      </div>
+      <div class="uc">
+        <div class="ct"><span class="env-badge ep">PROD</span><span class="type-badge type-s">Small</span></div>
+        <div class="cc">Gibson Shipbrokers</div><div class="cv">8.28.2 → <span>8.30.1</span></div>
+        <div class="cf"><span class="jp">DSD-31702</span><span class="tier-badge tp">Premier</span></div>
+      </div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Verified Done</span><span class="cb">2</span></div>
+    <div class="pcards">
+      <div class="uc" style="opacity:.55">
+        <div class="ct"><span class="env-badge ep">PROD</span></div>
+        <div class="cc">Blumenthal Asia</div><div class="cv">→ <span>8.30.1</span></div>
+        <div class="cf"><span style="font-size:9px;color:var(--green)">✓ Verified</span></div>
+      </div>
+      <div class="uc" style="opacity:.55">
+        <div class="ct"><span class="env-badge et">TEST</span></div>
+        <div class="cc">Baltic Bulk A/S</div><div class="cv">→ <span>8.30.1</span></div>
+        <div class="cf"><span style="font-size:9px;color:var(--green)">✓ Verified</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- WEEK CALENDAR -->
+  <div class="sh"><div><h2>This Week's Slots</h2><p>Mon 1pm · Tue 9:30 · Wed 10:00 · Thu 9:30 · Fri 11:30 — all times local to customer</p></div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm">← Prev</button><button class="btn btn-g btn-sm">Next →</button></div></div>
+  <div class="wc">
+    <div class="wc-h">
+      <div class="dc-h">Mon 18 Aug<span class="t">1:00 PM</span></div>
+      <div class="dc-h">Tue 19 Aug<span class="t">9:30 AM</span></div>
+      <div class="dc-h">Wed 20 Aug<span class="t">10:00 AM</span></div>
+      <div class="dc-h">Thu 21 Aug<span class="t">9:30 AM</span></div>
+      <div class="dc-h">Fri 22 Aug<span class="t">11:30 AM</span></div>
+    </div>
+    <div class="wc-b">
+      <div class="dc">
+        <div class="cs"><div class="ct" style="margin-bottom:3px"><span class="env-badge ep">PROD</span></div><div class="sn">Banchero Costa</div><div class="sd">→ 8.30.1 · DSD-31695</div></div>
+      </div>
+      <div class="dc">
+        <div class="cs"><div class="ct" style="margin-bottom:3px"><span class="env-badge ep">PROD</span></div><div class="sn">BP Oil International</div><div class="sd">→ 8.30.1 · DSD-31703<br><span style="color:var(--text3);font-size:8px">09:30 London time ✓</span></div></div>
+        <div class="cs unc"><div class="ct" style="margin-bottom:3px"><span class="env-badge et">TEST</span><span style="font-size:8px;color:var(--amber)">⚠ unconfirmed</span></div><div class="sn">Gibson Shipbrokers</div><div class="sd">→ 8.30.1 · DSD-31702</div></div>
+      </div>
+      <div class="dc"><div class="ce">+ Add upgrade</div></div>
+      <div class="dc">
+        <div class="cs unc"><div class="ct" style="margin-bottom:3px"><span class="env-badge ep">PROD</span><span style="font-size:8px;color:var(--amber)">⚠ unconfirmed</span></div><div class="sn">BainBridge Navigation</div><div class="sd">→ 8.30.1 · DSD-31696</div></div>
+      </div>
+      <div class="dc"><div class="ce">+ Add upgrade</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CUSTOMERS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-customers">
+  <div class="sh"><div><h2>Customer Intelligence</h2><p>Every customer · full context · click to open 360 view</p></div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm">Import CSV</button><button class="btn">+ Add Customer</button></div></div>
+
+  <!-- REVENUE AT RISK STRIP -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="sc alert"><div class="lbl">ARR on Old Infra</div><div class="val">£2.1M</div><div class="sub">67 customers</div></div>
+    <div class="sc alert"><div class="lbl">ARR — Red Health</div><div class="val">£890K</div><div class="sub">12 customers</div></div>
+    <div class="sc warn"><div class="lbl">ARR at Renewal Risk</div><div class="val">£1.4M</div><div class="sub">renewing within 60d</div></div>
+    <div class="sc warn"><div class="lbl">ARR — Open Defects</div><div class="val">£3.2M</div><div class="sub">23 customers affected</div></div>
+  </div>
+
+  <div class="tw">
+    <div class="ttb">
+      <input class="inp" style="width:190px" placeholder="Search customers...">
+      <select class="sel"><option>All tiers</option><option>Premier</option><option>Strategic</option><option>Scale</option></select>
+      <select class="sel"><option>All CSMs</option><option>Edward</option><option>Angelos</option><option>Marie-Therese</option><option>Grace</option><option>Kjersti</option></select>
+      <select class="sel"><option>All infra</option><option>Old only</option><option>New only</option></select>
+      <select class="sel"><option>All versions</option><option>Below 8.17</option><option>Below 8.23</option><option>8.23+</option></select>
+      <select class="sel"><option>All health</option><option>Red</option><option>Amber</option><option>Green</option></select>
+      <select class="sel"><option>All products</option><option>VMS</option><option>Email</option><option>CompassAir</option></select>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Health</th><th>Customer</th><th>Tier</th><th>CSM</th><th>ARR</th>
+        <th>Prod Version</th><th>Infra</th><th>Days Since Upgrade</th>
+        <th>Upgrades</th><th>Renewal</th><th>Open Cases</th><th>Migration</th>
+      </tr></thead>
+      <tbody>
+        <tr onclick="oc('nat')">
+          <td><div class="hc-mini"><div class="health-dot hr"></div><span class="hc-score" style="color:var(--red)">24</span></div></td>
+          <td class="td-name">NAT Chartering AS</td>
+          <td><span class="tier-badge ts">Strategic</span></td>
+          <td>Kjersti</td><td>£58,848</td>
+          <td class="vm" style="color:var(--red)">8.14.2-R</td>
+          <td><span class="infra-badge io">Old</span></td>
+          <td style="color:var(--red)">347d</td>
+          <td><div class="ub"><div class="bt"><div class="bf" style="width:20%"></div></div><span style="font-size:9px;color:var(--text3)">2/10</span></div></td>
+          <td style="color:var(--amber)">Jan 2027</td>
+          <td><span style="color:var(--red);font-weight:700">5</span></td>
+          <td><span class="priority-h">Not Started</span></td>
+        </tr>
+        <tr onclick="oc('bbc')">
+          <td><div class="hc-mini"><div class="health-dot ha"></div><span class="hc-score" style="color:var(--amber)">51</span></div></td>
+          <td class="td-name">BBC Chartering GmbH</td>
+          <td><span class="tier-badge tp">Premier</span></td>
+          <td>Marie-Therese</td><td>£248,800</td>
+          <td class="vm">8.28.1-R</td>
+          <td><span class="infra-badge im">Mixed</span></td>
+          <td style="color:var(--amber)">42d</td>
+          <td><div class="ub"><div class="bt"><div class="bf wa" style="width:70%"></div></div><span style="font-size:9px;color:var(--amber)">7/10</span></div></td>
+          <td style="color:var(--green)">Mar 2027</td>
+          <td><span style="color:var(--red);font-weight:700">3</span></td>
+          <td><span class="priority-m">In Progress</span></td>
+        </tr>
+        <tr onclick="oc('balena')">
+          <td><div class="hc-mini"><div class="health-dot ha"></div><span class="hc-score" style="color:var(--amber)">58</span></div></td>
+          <td class="td-name">Balena Shipping DMCC</td>
+          <td><span class="tier-badge ts">Strategic</span></td>
+          <td>Musthafa</td><td>£134,433</td>
+          <td class="vm">8.25.3-R</td>
+          <td><span class="infra-badge io">Old</span></td>
+          <td style="color:var(--amber)">68d</td>
+          <td><div class="ub"><div class="bt"><div class="bf" style="width:40%"></div></div><span style="font-size:9px;color:var(--text3)">4/10</span></div></td>
+          <td style="color:var(--red)">Sep 2026</td>
+          <td><span style="color:var(--amber);font-weight:700">1</span></td>
+          <td><span class="priority-h">Not Started</span></td>
+        </tr>
+        <tr onclick="oc('bp')">
+          <td><div class="hc-mini"><div class="health-dot hg"></div><span class="hc-score" style="color:var(--green)">88</span></div></td>
+          <td class="td-name">BP Oil International</td>
+          <td><span class="tier-badge tp">Premier</span></td>
+          <td>Grace</td><td>£670,291</td>
+          <td class="vm">8.29.0-R</td>
+          <td><span class="infra-badge in">New</span></td>
+          <td style="color:var(--green)">12d</td>
+          <td><div class="ub"><div class="bt"><div class="bf da" style="width:90%"></div></div><span style="font-size:9px;color:var(--red)">9/10</span></div></td>
+          <td style="color:var(--green)">Apr 2027</td>
+          <td>0</td>
+          <td><span class="priority-l">Complete</span></td>
+        </tr>
+        <tr>
+          <td><div class="hc-mini"><div class="health-dot hg"></div><span class="hc-score" style="color:var(--green)">82</span></div></td>
+          <td class="td-name">Gibson Shipbrokers Ltd</td>
+          <td><span class="tier-badge tp">Premier</span></td>
+          <td>Marie-Therese</td><td>£203,300</td>
+          <td class="vm">8.28.2-R</td>
+          <td><span class="infra-badge in">New</span></td>
+          <td>55d</td>
+          <td><div class="ub"><div class="bt"><div class="bf" style="width:30%"></div></div><span style="font-size:9px;color:var(--text3)">3/10</span></div></td>
+          <td style="color:var(--green)">Feb 2027</td>
+          <td>1</td>
+          <td><span class="priority-l">Complete</span></td>
+        </tr>
+        <tr>
+          <td><div class="hc-mini"><div class="health-dot ha"></div><span class="hc-score" style="color:var(--amber)">62</span></div></td>
+          <td class="td-name">Aquavita International</td>
+          <td><span class="tier-badge ts">Strategic</span></td>
+          <td>Angelos</td><td>£62,839</td>
+          <td class="vm">8.28.0-R</td>
+          <td><span class="infra-badge io">Old</span></td>
+          <td style="color:var(--amber)">91d</td>
+          <td><div class="ub"><div class="bt"><div class="bf" style="width:60%"></div></div><span style="font-size:9px;color:var(--text3)">6/10</span></div></td>
+          <td style="color:var(--amber)">Nov 2026</td>
+          <td>2</td>
+          <td><span class="priority-m">Assessed</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- MIGRATION -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-migration">
+  <div class="sh"><div><h2>Migration Tracker</h2><p>Old → New infrastructure · Asaph coordinates · Elias & Martin execute</p></div>
+  <div style="display:flex;gap:6px">
+    <select class="sel"><option>All customers</option><option>IP/FW only</option><option>Below 8.23</option><option>Premier & Strategic</option><option>Stalled 14d+</option></select>
+    <select class="sel"><option>All assignees</option><option>Elias</option><option>Martin</option><option>Unassigned</option></select>
+    <button class="btn">Export for Gisele</button>
+  </div></div>
+
+  <div class="stats-row sr-4">
+    <div class="sc alert"><div class="lbl">On Old Infrastructure</div><div class="val">67</div><div class="sub">£2.1M ARR at operational risk</div></div>
+    <div class="sc warn"><div class="lbl">In Active Pipeline</div><div class="val">23</div><div class="sub">some stage in progress</div></div>
+    <div class="sc warn"><div class="lbl">Need Upgrade First</div><div class="val">18</div><div class="sub">version below 8.23 · Elias rule</div></div>
+    <div class="sc good"><div class="lbl">Migrated This Year</div><div class="val">41</div><div class="sub">target 120 · on track</div></div>
+  </div>
+
+  <div class="info-bar">ℹ Customers below 8.23 flagged for combined upgrade + migration. 18 customers require this — coordinate with Elias before scheduling. IP/firewall customers (🔒) need extended checklist and integration team sign-off.</div>
+  <div class="amber-bar">⏱ BBC Chartering has been in "Customer Contacted" for 18 days — follow up needed before migration stalls further. Renewal: Mar 2027.</div>
+
+  <div class="pb pb-8" style="gap:8px">
+    <div class="pc"><div class="pc-h"><span class="cn">Not Started</span><span class="cb">44</span></div>
+    <div class="pcards">
+      <div class="mc" onclick="oc('nat')"><div class="mn">NAT Chartering AS</div><div class="mm"><span class="flag-pill fup">⬆ Upgrade first</span><span class="tier-badge ts">Strategic</span></div><div class="mv">8.14.2-R · old</div><div class="ma">CSM: Kjersti · £58,848</div></div>
+      <div class="mc" onclick="oc('balena')"><div class="mn">Balena Shipping DMCC</div><div class="mm"><span class="flag-pill fip">🔒 IP/FW</span><span class="tier-badge ts">Strategic</span></div><div class="mv">8.25.3-R · old</div><div class="ma">CSM: Musthafa · ⚠ Renews Sep 2026</div></div>
+      <div class="mc"><div class="mn">BainBridge Navigation</div><div class="mm"><span class="tier-badge ts">Strategic</span></div><div class="mv">8.29.0-R · old</div><div class="ma">CSM: Musthafa · £79,736</div></div>
+      <div style="text-align:center;padding:6px;font-size:9px;color:var(--text3)">+ 41 more</div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Assessed</span><span class="cb">6</span></div>
+    <div class="pcards">
+      <div class="mc"><div class="mn">Aquavita International</div><div class="mm"><span class="flag-pill fip">🔒 IP/FW</span><span class="tier-badge ts">Strategic</span></div><div class="mv">8.28.0-R · old</div><div class="ma">Assigned: Elias</div></div>
+      <div class="mc"><div class="mn">Ardmore Shipping Asia</div><div class="mm"><span class="tier-badge tsc">Scale</span></div><div class="mv">8.26.0-R · old</div><div class="ma">Assigned: Martin</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">DevOps Priority</span><span class="cb">4</span></div>
+    <div class="pcards">
+      <div class="mc"><div class="mn">Augustea Holding SPA</div><div class="mm"><span class="tier-badge ts">Strategic</span></div><div class="mv">8.27.1-R · old</div><div class="ma">Assigned: Elias</div></div>
+      <div class="mc"><div class="mn">Anglo American Pte</div><div class="mm"><span class="flag-pill fip">🔒 IP/FW</span><span class="tier-badge ts">Strategic</span></div><div class="mv">8.24.0-R · old</div><div class="ma">Assigned: Elias</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Cust. Contacted</span><span class="cb">3</span></div>
+    <div class="pcards">
+      <div class="mc" onclick="oc('bbc')"><div class="mn">BBC Chartering GmbH</div><div class="mm"><span class="flag-pill fst">⏱ 18d stalled</span><span class="tier-badge tp">Premier</span></div><div class="mv">8.28.1-R · mixed</div><div class="ma" style="color:var(--red)">SAP integration · contact: James T.</div></div>
+      <div class="mc"><div class="mn">Blumenthal Asia Pte</div><div class="mm"><span class="tier-badge ts">Strategic</span></div><div class="mv">8.27.0-R · old</div><div class="ma">Assigned: Martin</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Downtime Agreed</span><span class="cb">2</span></div>
+    <div class="pcards">
+      <div class="mc"><div class="mn">Archer-Daniels-Midland</div><div class="mm"><span class="tier-badge tp">Premier</span></div><div class="mv">8.29.0-R · old</div><div class="ma" style="color:var(--green)">Wed 20 Aug · 02:00 UTC</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">In Progress</span><span class="cb">1</span></div>
+    <div class="pcards">
+      <div class="mc" style="border-color:rgba(11,197,234,.3)"><div class="mn">Aurora Tankers Mgmt</div><div class="mm"><span class="tier-badge tsc">Scale</span></div><div class="mv">8.28.0-R</div><div class="ma" style="color:var(--teal)">▶ New env building · Elias</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Verifying</span><span class="cb">1</span></div>
+    <div class="pcards">
+      <div class="mc"><div class="mn">Aza Shipping Pvt</div><div class="mm"><span class="tier-badge tsc">Scale</span></div><div class="mv">8.28.2-R</div><div class="ma" style="color:var(--amber)">URL switched · checking</div></div>
+    </div></div>
+
+    <div class="pc"><div class="pc-h"><span class="cn">Complete</span><span class="cb">41</span></div>
+    <div class="pcards">
+      <div class="mc" style="opacity:.5"><div class="mn">BP Oil International</div><div class="mv" style="color:var(--green)">✓ 2 Mar 2026</div></div>
+      <div class="mc" style="opacity:.5"><div class="mn">Gibson Shipbrokers</div><div class="mv" style="color:var(--green)">✓ 14 Apr 2026</div></div>
+      <div style="text-align:center;padding:5px;font-size:9px;color:var(--text3)">+ 39 more</div>
+    </div></div>
+  </div>
+
+  <!-- PRIORITY TABLE -->
+  <div class="sh"><div><h2>Migration Priority</h2><p>Ranked by ARR × (crash rate + version age + tier weight) · IP/FW customers need extended checklist</p></div></div>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Customer</th><th>Tier</th><th>ARR</th><th>Version</th><th>Days Old Infra</th><th>Open Cases</th><th>Renewal</th><th>Flags</th><th>Assignee</th><th>Priority</th><th></th></tr></thead>
+    <tbody>
+      <tr onclick="oc('nat')"><td style="color:var(--text3);font-weight:700">1</td><td class="td-name">NAT Chartering AS</td><td><span class="tier-badge ts">Strategic</span></td><td>£58,848</td><td class="vm" style="color:var(--red)">8.14.2-R</td><td style="color:var(--red)">700+</td><td style="color:var(--red);font-weight:700">5</td><td>Jan 2027</td><td><span class="flag-pill fup">⬆ Upgrade first</span></td><td style="color:var(--text3)">Unassigned</td><td><span class="priority-h">Critical</span></td><td><button class="btn btn-sm" onclick="event.stopPropagation()">Assign</button></td></tr>
+      <tr onclick="oc('balena')"><td style="color:var(--text3);font-weight:700">2</td><td class="td-name">Balena Shipping DMCC</td><td><span class="tier-badge ts">Strategic</span></td><td>£134,433</td><td class="vm">8.25.3-R</td><td style="color:var(--amber)">320</td><td style="color:var(--amber);font-weight:700">1</td><td style="color:var(--red);font-weight:700">Sep 2026</td><td><span class="flag-pill fip">🔒 IP/FW</span></td><td style="color:var(--text3)">Unassigned</td><td><span class="priority-h">Critical</span></td><td><button class="btn btn-sm" onclick="event.stopPropagation()">Assign</button></td></tr>
+      <tr onclick="oc('bbc')"><td style="color:var(--text3);font-weight:700">3</td><td class="td-name">BBC Chartering GmbH</td><td><span class="tier-badge tp">Premier</span></td><td>£248,800</td><td class="vm">8.28.1-R</td><td style="color:var(--amber)">180</td><td style="color:var(--red);font-weight:700">3</td><td>Mar 2027</td><td><span class="flag-pill fst">⏱ 18d stalled</span></td><td>Elias</td><td><span class="priority-h">High</span></td><td><button class="btn btn-sm btn-g" onclick="event.stopPropagation()">Follow up</button></td></tr>
+    </tbody>
+  </table></div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- RELEASES -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-releases">
+  <div class="sh"><div><h2>Release Intelligence</h2><p>Track releases · see who needs upgrading · generate proactive contact lists</p></div><button class="btn">+ Add Release</button></div>
+  <div class="info-bar">ℹ When a release is added and defects are tagged, Sedna Ops automatically identifies which customers have those defects open and are below the fix version — generating your proactive upgrade contact list.</div>
+
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:16px">
+    <div>
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px">Recent Releases</div>
+      <div class="ric">
+        <div class="ri-ver">8.30.1-R</div>
+        <div class="ri-meta">Released 2 Aug 2026 · 12 defects fixed · 3 improvements</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span class="type-badge type-s">Current latest</span>
+          <span style="font-size:9px;color:var(--green)">74 customers on this version</span>
+        </div>
+        <div class="ri-impact">Fixes: DSD-31622 (accruals) · DSD-31651 (fleet plan) · DSD-31489 (laytime calc) + 9 more</div>
+      </div>
+      <div class="ric">
+        <div class="ri-ver">8.29.1-R</div>
+        <div class="ri-meta">Released 14 Jul 2026 · 7 defects fixed</div>
+        <div class="ri-impact">Fixes: DSD-31401 (invoice posting) · DSD-31388 (TC rate) + 5 more</div>
+      </div>
+      <div class="ric">
+        <div class="ri-ver">8.28.2-R</div>
+        <div class="ri-meta">Released 1 Jul 2026 · 4 defects fixed</div>
+        <div class="ri-impact">Fixes: DSD-31290 (bunker calc) · DSD-31271 (port call dates) + 2 more</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px">Release 8.30.1 — Impact Analysis</div>
+      <div class="alert-bar" style="margin-bottom:12px">⚠ 3 customers have DSD-31622 (accruals defect) open and are below 8.30.1 — proactive upgrade contact recommended.</div>
+      <div class="tw"><table>
+        <thead><tr><th>Customer</th><th>Tier</th><th>Current Version</th><th>Defect</th><th>Last Contact</th><th>Renewal</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr onclick="oc('nat')"><td class="td-name">NAT Chartering AS</td><td><span class="tier-badge ts">Strategic</span></td><td class="vm" style="color:var(--red)">8.14.2-R</td><td><span class="jp">DSD-31622</span><span class="jp" style="margin-left:4px">DSD-31651</span></td><td style="color:var(--red)">12d ago</td><td>Jan 2027</td><td><button class="btn btn-sm">Recommend Upgrade</button></td></tr>
+          <tr><td class="td-name">Ardmore Shipping Asia</td><td><span class="tier-badge tsc">Scale</span></td><td class="vm" style="color:var(--amber)">8.26.0-R</td><td><span class="jp">DSD-31622</span></td><td>5d ago</td><td>Jun 2027</td><td><button class="btn btn-sm">Recommend Upgrade</button></td></tr>
+          <tr><td class="td-name">Anchor Chartering Srl</td><td><span class="tier-badge tsc">Scale</span></td><td class="vm">8.25.1-R</td><td><span class="jp">DSD-31622</span></td><td>22d ago</td><td>Aug 2027</td><td><button class="btn btn-sm">Recommend Upgrade</button></td></tr>
+        </tbody>
+      </table></div>
+      <div style="margin-top:12px">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:8px">Systemic Issue Signal</div>
+        <div style="background:var(--red-dim);border:1px solid rgba(232,68,90,.25);border-radius:7px;padding:11px 13px;font-size:11px;color:var(--text2)">
+          <span style="color:var(--red);font-weight:700">Fleet-wide defect detected:</span> DSD-31622 (period-end accruals failure) affects <strong style="color:var(--text)">8 customers</strong> across versions 8.14–8.26. Combined ARR: <strong style="color:var(--text)">£412,000</strong>. Fix shipped in 8.30.1. <span style="color:var(--amber)">5 of 8 not yet upgraded.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- EDUCATION -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-education">
+  <div class="sh"><div><h2>Customer Education</h2><p>Training gaps across your customer base · feeds Sedna Academy content priorities</p></div><button class="btn">+ Log Training Session</button></div>
+  <div class="info-bar">ℹ Training gap data here feeds directly into the Sedna Academy LMS content roadmap. The most common gaps = the most needed course modules.</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+    <div class="tc">
+      <h4>Top Training Gaps — Fleet Wide (last 90 days)</h4>
+      <div class="gap-bar"><div class="gap-label">Finance · Period-End Closing</div><div class="gap-track"><div class="gap-fill" style="width:78%">18 cases</div></div></div>
+      <div class="gap-bar"><div class="gap-label">Voyage Management</div><div class="gap-track"><div class="gap-fill" style="width:60%">14 cases</div></div></div>
+      <div class="gap-bar"><div class="gap-label">Laytime & Demurrage</div><div class="gap-track"><div class="gap-fill" style="width:52%">12 cases</div></div></div>
+      <div class="gap-bar"><div class="gap-label">API / Integrations</div><div class="gap-track"><div class="gap-fill" style="width:35%">8 cases</div></div></div>
+      <div class="gap-bar"><div class="gap-label">Fleet Plan & Scheduling</div><div class="gap-track"><div class="gap-fill" style="width:28%">6 cases</div></div></div>
+      <div class="gap-bar"><div class="gap-label">Reporting & BI</div><div class="gap-track"><div class="gap-fill" style="width:20%">4 cases</div></div></div>
+      <div style="margin-top:12px;font-size:10px;color:var(--text3)">→ Priority 1 for Sedna Academy: Finance module · Laytime fundamentals · Voyage lifecycle</div>
+    </div>
+    <div class="tc">
+      <h4>Customers with Recurring Gaps (2+ in same area)</h4>
+      <div class="tli"><span class="tli-n">BBC Chartering GmbH</span><div style="display:flex;gap:6px;align-items:center"><span class="tier-badge tp">Premier</span><span style="font-size:10px;color:var(--purple);font-weight:700">Finance (×2)</span></div></div>
+      <div class="tli"><span class="tli-n">NAT Chartering AS</span><div style="display:flex;gap:6px;align-items:center"><span class="tier-badge ts">Strategic</span><span style="font-size:10px;color:var(--purple);font-weight:700">Laytime (×3)</span></div></div>
+      <div class="tli"><span class="tli-n">Aquavita International</span><div style="display:flex;gap:6px;align-items:center"><span class="tier-badge ts">Strategic</span><span style="font-size:10px;color:var(--purple);font-weight:700">Voyage Mgmt (×2)</span></div></div>
+      <div class="tli"><span class="tli-n">Balena Shipping DMCC</span><div style="display:flex;gap:6px;align-items:center"><span class="tier-badge ts">Strategic</span><span style="font-size:10px;color:var(--purple);font-weight:700">API (×2)</span></div></div>
+      <div style="margin-top:12px;padding:9px;background:var(--purple-dim);border:1px solid rgba(155,108,245,.2);border-radius:6px;font-size:10px;color:var(--purple)">4 customers recommended for dedicated training sessions. Consider proactive outreach via CSM.</div>
+    </div>
+  </div>
+
+  <div class="sh"><div><h2>Training Log</h2><p>All sessions delivered</p></div></div>
+  <div class="tw"><table>
+    <thead><tr><th>Date</th><th>Customer</th><th>Tier</th><th>CSM</th><th>Topic Area</th><th>Format</th><th>Delivered By</th><th>Follow-up Needed</th></tr></thead>
+    <tbody>
+      <tr onclick="oc('bbc')"><td style="color:var(--text3)">12 Jun 2026</td><td class="td-name">BBC Chartering GmbH</td><td><span class="tier-badge tp">Premier</span></td><td>Marie-Therese</td><td>Finance · Accruals</td><td>Video call · 1h</td><td>Asaph</td><td><span style="color:var(--amber)">Yes · Period-end guide</span></td></tr>
+      <tr onclick="oc('nat')"><td style="color:var(--text3)">28 May 2026</td><td class="td-name">NAT Chartering AS</td><td><span class="tier-badge ts">Strategic</span></td><td>Kjersti</td><td>Laytime Calculation</td><td>Screen share · 45m</td><td>Asaph</td><td><span style="color:var(--green)">Resolved</span></td></tr>
+      <tr><td style="color:var(--text3)">14 May 2026</td><td class="td-name">Aquavita International</td><td><span class="tier-badge ts">Strategic</span></td><td>Angelos</td><td>Voyage Management</td><td>Video call · 1.5h</td><td>Asaph</td><td><span style="color:var(--amber)">Yes · Multi-port cargo guide</span></td></tr>
+    </tbody>
+  </table></div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- TRENDS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-trends">
+  <div class="sh"><div><h2>Trends & Fleet Health</h2><p>Derived intelligence · revenue-weighted · feeds Gisele summary</p></div><button class="btn btn-g btn-sm">Export Management Summary</button></div>
+  <div class="stats-row sr-5">
+    <div class="sc alert"><div class="lbl">No Upgrade 12mo+</div><div class="val">8</div><div class="sub">£312K ARR stagnating</div></div>
+    <div class="sc alert"><div class="lbl">ARR — Red Health</div><div class="val">£890K</div><div class="sub">12 customers</div></div>
+    <div class="sc warn"><div class="lbl">At Upgrade Limit</div><div class="val">3</div><div class="sub">BP Oil · 2 others</div></div>
+    <div class="sc good"><div class="lbl">Migration Rate</div><div class="val">41</div><div class="sub">complete · 7mo to finish</div></div>
+    <div class="sc info"><div class="lbl">Systemic Issues</div><div class="val">2</div><div class="sub">affecting 8+ customers each</div></div>
+  </div>
+  <div class="tg">
+    <div class="tc">
+      <h4>Version Distribution — Prod Environments</h4>
+      <div class="vbr"><div class="vl">8.30.x</div><div class="vt"><div class="vf v-new" style="width:38%">74 customers</div></div></div>
+      <div class="vbr"><div class="vl">8.28–29</div><div class="vt"><div class="vf v-new" style="width:30%">58 customers</div></div></div>
+      <div class="vbr"><div class="vl">8.25–27</div><div class="vt"><div class="vf v-mid" style="width:18%">35 customers</div></div></div>
+      <div class="vbr"><div class="vl">8.23–24</div><div class="vt"><div class="vf v-mid" style="width:8%">15</div></div></div>
+      <div class="vbr"><div class="vl">&lt; 8.23</div><div class="vt"><div class="vf v-old" style="width:5%">9</div></div></div>
+      <div class="vbr"><div class="vl">&lt; 8.17</div><div class="vt"><div class="vf v-old" style="width:2%">3</div></div></div>
+    </div>
+    <div class="tc">
+      <h4>Revenue at Risk — Four Lenses</h4>
+      <div class="tli"><span class="tli-n">On old infrastructure</span><span style="font-family:monospace;font-size:11px;color:var(--red);font-weight:700">£2,100,000</span></div>
+      <div class="tli"><span class="tli-n">Red health score</span><span style="font-family:monospace;font-size:11px;color:var(--red);font-weight:700">£890,000</span></div>
+      <div class="tli"><span class="tli-n">Renewing within 60d · amber/red health</span><span style="font-family:monospace;font-size:11px;color:var(--amber);font-weight:700">£1,400,000</span></div>
+      <div class="tli"><span class="tli-n">Has open defects</span><span style="font-family:monospace;font-size:11px;color:var(--amber);font-weight:700">£3,200,000</span></div>
+      <div style="margin-top:10px;padding:9px;background:var(--red-dim);border-radius:6px;font-size:10px;color:var(--red)">Total addressable risk if no action: <strong>£4.1M ARR</strong> (some customers overlap multiple lenses)</div>
+    </div>
+    <div class="tc">
+      <h4>Pipeline Dwell Time — Where Upgrades Get Stuck</h4>
+      <div class="tli"><span class="tli-n">Requested → DevOps Approved</span><span style="font-family:monospace;font-size:11px;color:var(--green)">1.2 days</span></div>
+      <div class="tli"><span class="tli-n">DevOps → Customer Confirmed</span><span style="font-family:monospace;font-size:11px;color:var(--red);font-weight:700">4.8 days ⚠</span></div>
+      <div class="tli"><span class="tli-n">Confirmed → Scheduled</span><span style="font-family:monospace;font-size:11px;color:var(--green)">1.4 days</span></div>
+      <div class="tli"><span class="tli-n">Scheduled → Done</span><span style="font-family:monospace;font-size:11px;color:var(--green)">0.2 days</span></div>
+      <div class="tli"><span class="tli-n">Done → Verified</span><span style="font-family:monospace;font-size:11px;color:var(--amber)">2.1 days</span></div>
+      <div style="margin-top:10px;padding:9px;background:var(--amber-dim);border-radius:6px;font-size:10px;color:var(--amber)">Customer confirmation is your biggest bottleneck. Consider SMS/Slack nudge after 48h.</div>
+    </div>
+    <div class="tc">
+      <h4>CSM Workload & Fleet Health</h4>
+      <div class="tli"><span class="tli-n">Marie-Therese</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text3)">4 accounts · £655K ARR</span><div class="health-dot ha"></div></div></div>
+      <div class="tli"><span class="tli-n">Angelos</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text3)">8 accounts · £312K ARR</span><div class="health-dot hg"></div></div></div>
+      <div class="tli"><span class="tli-n">Grace</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text3)">3 accounts · £720K ARR</span><div class="health-dot hg"></div></div></div>
+      <div class="tli"><span class="tli-n">Kjersti</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text3)">2 accounts · £75K ARR</span><div class="health-dot hr"></div></div></div>
+      <div class="tli"><span class="tli-n">Musthafa</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--text3)">3 accounts · £348K ARR</span><div class="health-dot ha"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SNAPSHOT -->
+<!-- ═══════════════════════════════════════ -->
+<div class="view" id="view-snapshot">
+  <div class="sh"><div><h2>End of Day Snapshot</h2><p>Tue 18 Aug 2026 · Generated for handover</p></div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm">Copy as text</button><button class="btn">Share with Gisele</button></div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div>
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--red);margin-bottom:8px">Requires Action Tomorrow</div>
+      <div class="ec" style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Chase Dev on DSD-31667 (NAT Chartering)</div>
+        <div style="font-size:10px;color:var(--text3)">12 days in Awaiting Dev · SLA breached · Strategic customer</div>
+      </div>
+      <div class="ec" style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Follow up: BBC Chartering migration stall</div>
+        <div style="font-size:10px;color:var(--text3)">18 days in Customer Contacted · SAP integration · contact James T.</div>
+      </div>
+      <div class="ec" style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Balena renewal at risk — Sep 2026</div>
+        <div style="font-size:10px;color:var(--text3)">Migration not started · IP/FW complexity · alert CSM Musthafa</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--green);margin-bottom:8px">Completed Today</div>
+      <div class="ec" style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Blumenthal Asia — PROD upgrade verified ✓</div>
+        <div style="font-size:10px;color:var(--text3)">8.27.0 → 8.30.1 · DSD-31681 · customer notified</div>
+      </div>
+      <div class="ec" style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Baltic Bulk — TEST upgrade verified ✓</div>
+        <div style="font-size:10px;color:var(--text3)">8.25.1 → 8.30.1 · DSD-31677 · customer notified</div>
+      </div>
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);margin-bottom:8px;margin-top:14px">Blocked / Waiting</div>
+      <div class="ec">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">2 PROD upgrades frozen</div>
+        <div style="font-size:10px;color:var(--text3)">Augustea (DSD-31694) · Ardmore (DSD-31701) — awaiting TEST confirmation from customers</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- CUSTOMER DETAIL PANEL -->
+<div class="overlay" id="overlay" onclick="cd()"></div>
+<div class="dp" id="dp">
+  <div class="dp-h" style="position:relative">
+    <button class="cbx" onclick="cd()">✕</button>
+    <h3 id="dp-name">—</h3>
+    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap" id="dp-badges"></div>
+    <div style="margin-top:6px;display:flex;gap:6px;align-items:center" id="dp-health"></div>
+  </div>
+  <div class="dp-tabs">
+    <div class="dt active" onclick="st(this,'to')">Overview</div>
+    <div class="dt" onclick="st(this,'tc')">Cases</div>
+    <div class="dt" onclick="st(this,'tu')">Upgrades</div>
+    <div class="dt" onclick="st(this,'tm')">Migration</div>
+    <div class="dt" onclick="st(this,'te')">Education</div>
+    <div class="dt" onclick="st(this,'ttl')">Timeline</div>
+    <div class="dt" onclick="st(this,'tn')">Notes</div>
+  </div>
+  <div class="dp-body">
+    <!-- OVERVIEW -->
+    <div id="to">
+      <div class="ds"><h4>Commercial</h4>
+        <div class="fg" id="dp-commercial"></div>
+      </div>
+      <div class="ds"><h4>Environments</h4><div id="dp-envs"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <input class="inp" style="flex:1" placeholder="Tenant ID for live check e.g. kgjs-web-test" id="ti">
+          <button class="btn" onclick="conn()">Connect</button>
+        </div>
+        <div id="cr" style="margin-top:6px;font-size:10px;color:var(--text3)"></div>
+      </div>
+      <div class="ds"><h4>Scheduling Preferences</h4><div id="dp-sched"></div></div>
+    </div>
+    <!-- CASES -->
+    <div id="tc" style="display:none">
+      <div class="info-bar">Jira links — click reference to open in Jira. Local status tracked here, never touches Jira labels.</div>
+      <div id="dp-cases"></div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <input class="inp" style="flex:1;min-width:120px" placeholder="Link ticket e.g. DSD-31692">
+        <select class="sel"><option>Upgrade</option><option>Defect</option><option>Support</option><option>Training Gap</option></select>
+        <select class="sel"><option>PROD</option><option>TEST</option><option>DEV</option></select>
+        <button class="btn">Link</button>
+      </div>
+    </div>
+    <!-- UPGRADES -->
+    <div id="tu" style="display:none"><div id="dp-upgrades"></div></div>
+    <!-- MIGRATION -->
+    <div id="tm" style="display:none"><div id="dp-mig"></div></div>
+    <!-- EDUCATION -->
+    <div id="te" style="display:none"><div id="dp-edu"></div></div>
+    <!-- TIMELINE -->
+    <div id="ttl" style="display:none"><div id="dp-timeline"></div></div>
+    <!-- NOTES -->
+    <div id="tn" style="display:none">
+      <textarea class="inp" style="min-height:100px;resize:vertical" placeholder="Add a note..."></textarea>
+      <button class="btn" style="margin-top:8px">Save Note</button>
+      <div class="divider"></div>
+      <div id="dp-notes"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const C={
+  nat:{name:'NAT Chartering AS',tier:'Strategic',csm:'Kjersti',arr:'£58,848',product:'VMS',plan:'Time Charter Edition',region:'Europe · Norway',tz:'Europe/Oslo (UTC+2)',contacts:'Bjorn Hagen (Primary) · IT Dept (Technical)',renewal:'Jan 2027',seats:12,sla:'Standard',health:24,sentiment:'Frustrated',churn:'High',upgradesUsed:2,upgradesLimit:10,prefDays:'Mon, Tue',notice:'5 business days',blackout:'Year-end Dec',infra:'Old',prodVer:'8.14.2-R',testVer:'8.14.2-R',integrations:'None',sso:'None',wf8:true,api:false,
+  cases:[
+    {ref:'DSD-31667',title:'TC rate calculation off on Worldscale voyages',type:'Defect',env:'PROD',status:'Awaiting Dev',days:12,defectStatus:'In Development · targeted 8.30.2'},
+    {ref:'DSD-31651',title:'Fleet plan not showing correct vessel position',type:'Defect',env:'PROD',status:'Awaiting Dev',days:9,defectStatus:'In Development'},
+    {ref:'DSD-31640',title:'Performance very slow on voyage list',type:'Support',env:'PROD',status:'Active',days:7},
+    {ref:'DSD-31622',title:'Cannot post accruals at period end',type:'Defect',env:'PROD',status:'Awaiting Dev',days:18,defectStatus:'Released in 8.30.1 — upgrade needed'},
+    {ref:'DSD-31688',title:'Upgrade TEST to 8.30.1 — complex upgrade',type:'Upgrade',env:'TEST',status:'Awaiting DevOps',days:4}
+  ],
+  upgrades:[{env:'PROD',from:'8.10.0',to:'8.14.2',date:'4 Nov 2024',source:'Customer request',status:'Verified'}],
+  mig:{status:'Not Started',assignee:null,ip:false,complexity:'High',requiresUpgrade:true,ipNotes:'',stalled:false,integrations:'WildFly 8 active — legacy reporting dependency. Must verify reporting after migration.'},
+  edu:[{date:'28 May 2026',topic:'Laytime Calculation',format:'Screen share 45m',outcome:'Resolved',followUp:false},{date:'12 Mar 2026',topic:'Laytime & Demurrage',format:'Video call 1h',outcome:'Partial — follow-up needed',followUp:true}],
+  gaps:['Laytime & Demurrage (×3)','Fleet Plan (×1)','Period-End Closing (×1)'],
+  timeline:[
+    {what:'DSD-31667 raised — TC rate defect',when:'6 Aug 2026',type:'case',col:'var(--red)'},
+    {what:'DSD-31622 confirmed fixed in 8.30.1 — upgrade recommended',when:'2 Aug 2026',type:'release',col:'var(--green)'},
+    {what:'DSD-31651 raised — fleet plan defect',when:'9 Jul 2026',type:'case',col:'var(--red)'},
+    {what:'Training session: Laytime Calculation',when:'28 May 2026',type:'education',col:'var(--purple)'},
+    {what:'PROD upgrade 8.10.0 → 8.14.2 verified',when:'4 Nov 2024',type:'upgrade',col:'var(--green)'}
+  ],
+  notes:[{text:'WildFly 8 active — legacy reporting. Must test reports after migration. Coordinate with Elias.',date:'14 Jun 2026'},{text:'Below 8.17 — complex upgrade. Upgrade and migrate in same window.',date:'14 Jun 2026'}]},
+
+  bbc:{name:'BBC Chartering GmbH & Co. KG',tier:'Premier',csm:'Marie-Therese',arr:'£248,800',product:'Email, VMS',plan:'Bulk Edition (Wet)',region:'Europe · Germany',tz:'Europe/Berlin (UTC+2)',contacts:'James T. (Primary) · IT Dept (Technical)',renewal:'Mar 2027',seats:45,sla:'Premium (5d)',health:51,sentiment:'Neutral',churn:'Medium',upgradesUsed:7,upgradesLimit:10,prefDays:'Monday mornings',notice:'48 hours',blackout:'Q4 year-end',infra:'Mixed',prodVer:'8.28.1-R',testVer:'8.30.1-R',integrations:'SAP (accounting)',sso:'Auth0',wf8:false,api:true,
+  cases:[
+    {ref:'DSD-31705',title:'Upgrade prod to 8.30.1',type:'Upgrade',env:'PROD',status:'Requested',days:1},
+    {ref:'DSD-31690',title:'Voyage calculation defect on multi-port cargo',type:'Defect',env:'PROD',status:'Awaiting Dev',days:6,defectStatus:'In Development · urgent'},
+    {ref:'DSD-31683',title:'User unable to post invoice after period close',type:'Support',env:'PROD',status:'Awaiting Customer',days:3,rootCause:'Training Gap — period-end closing'}
+  ],
+  upgrades:[
+    {env:'PROD',from:'8.27.0',to:'8.28.1',date:'2 May 2026',source:'Customer request',status:'Verified'},
+    {env:'TEST',from:'8.28.1',to:'8.30.1',date:'14 Jun 2026',source:'Customer request',status:'Verified'}
+  ],
+  mig:{status:'Customer Contacted',assignee:'Elias',ip:false,complexity:'High',requiresUpgrade:false,stalled:true,stalledDays:18,downtime:'TBC',integrations:'SAP integration — IP whitelisting required. SAP team needs 48h notice. Contact: James T.'},
+  edu:[{date:'12 Jun 2026',topic:'Finance · Period-End Closing',format:'Video call 1h',outcome:'Partial',followUp:true}],
+  gaps:['Finance · Period-End Closing (×2)','Voyage Management (×1)'],
+  timeline:[
+    {what:'DSD-31683 root cause: training gap — period-end closing',when:'15 Aug 2026',type:'education',col:'var(--purple)'},
+    {what:'Migration stall — 18 days in Customer Contacted',when:'18 Aug 2026',type:'alert',col:'var(--red)'},
+    {what:'DSD-31690 raised — multi-port voyage defect',when:'12 Aug 2026',type:'case',col:'var(--red)'},
+    {what:'Training: Finance · Period-End Closing',when:'12 Jun 2026',type:'education',col:'var(--purple)'},
+    {what:'PROD upgrade 8.27.0 → 8.28.1 verified',when:'2 May 2026',type:'upgrade',col:'var(--green)'}
+  ],
+  notes:[{text:'SAP integration — migration requires SAP team (James T.) with 48h notice minimum.',date:'1 Jun 2026'},{text:'Customer prefers Monday morning downtime windows.',date:'10 May 2026'}]},
+
+  balena:{name:'Balena Shipping DMCC (White Lake Shipping)',tier:'Strategic',csm:'Musthafa',arr:'£134,433',product:'Email + VMS',plan:'Bulk Edition (Wet/Dry)',region:'Middle East · Dubai',tz:'Asia/Dubai (UTC+4)',contacts:'Operations Manager (Primary)',renewal:'Sep 2026',seats:22,sla:'Standard',health:58,sentiment:'Neutral',churn:'High',upgradesUsed:4,upgradesLimit:10,prefDays:'Tue, Wed',notice:'1 week',blackout:'Ramadan period',infra:'Old',prodVer:'8.25.3-R',testVer:'8.25.3-R',integrations:'Custom firewall',sso:'None',wf8:false,api:false,
+  cases:[{ref:'DSD-31692',title:'Sedna VMS upgrade request — PROD to 8.30.1',type:'Upgrade',env:'PROD',status:'Active',days:2}],
+  upgrades:[{env:'PROD',from:'8.23.0',to:'8.25.3',date:'12 Jan 2026',source:'Customer request',status:'Verified'}],
+  mig:{status:'Not Started',assignee:null,ip:true,complexity:'Very High',requiresUpgrade:false,stalled:false,ipNotes:'Custom firewall rules — full integration assessment required before migration. Coordinate with customer IT dept.'},
+  edu:[],gaps:['API Integration (×2)'],
+  timeline:[
+    {what:'DSD-31692 raised — upgrade request PROD',when:'16 Aug 2026',type:'case',col:'var(--accent)'},
+    {what:'PROD upgrade 8.23.0 → 8.25.3 verified',when:'12 Jan 2026',type:'upgrade',col:'var(--green)'}
+  ],
+  notes:[{text:'Renews Sep 2026 — churn risk. Prioritise migration and upgrade before renewal conversation.',date:'18 Aug 2026'},{text:'IP/firewall requirements — need Elias for pre-migration assessment.',date:'8 Jun 2026'}]},
+
+  bp:{name:'BP Oil International Limited',tier:'Premier',csm:'Grace',arr:'£670,291',product:'Email',plan:'Broker Edition',region:'Europe · UK',tz:'Europe/London (UTC+1)',contacts:'Operations Lead (Primary)',renewal:'Apr 2027',seats:120,sla:'Premium (5d)',health:88,sentiment:'Happy',churn:'Low',upgradesUsed:9,upgradesLimit:10,prefDays:'Any',notice:'24 hours',blackout:'None',infra:'New',prodVer:'8.29.0-R',testVer:'8.30.1-R',integrations:'None',sso:'Auth0',wf8:false,api:true,
+  cases:[],
+  upgrades:[
+    {env:'PROD',from:'8.28.0',to:'8.29.0',date:'4 Jun 2026',source:'Customer request',status:'Verified'},
+    {env:'TEST',from:'8.29.0',to:'8.30.1',date:'10 Jun 2026',source:'Customer request',status:'Verified'}
+  ],
+  mig:{status:'Complete',assignee:'Martin',ip:false,complexity:'Low',stalled:false,downtime:'2 Mar 2026 · 01:00 UTC'},
+  edu:[],gaps:[],
+  timeline:[
+    {what:'TEST upgrade 8.29.0 → 8.30.1 verified',when:'10 Jun 2026',type:'upgrade',col:'var(--green)'},
+    {what:'PROD upgrade 8.28.0 → 8.29.0 verified',when:'4 Jun 2026',type:'upgrade',col:'var(--green)'},
+    {what:'Migration complete · verified',when:'2 Mar 2026',type:'migration',col:'var(--teal)'}
+  ],
+  notes:[{text:'At upgrade limit — 9/10. Any further upgrade requests need manager approval before proceeding.',date:'10 Jun 2026'}]}
+};
+
+function sv(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('view-'+id);
+  if(el)el.classList.add('active');
+  const nb=document.getElementById('nav-'+id);
+  if(nb)nb.classList.add('active');
+  const titles={triage:'Triage Queue',command:'Command Centre',customers:'Customer Intelligence',migration:'Migration Tracker',releases:'Release Intelligence',education:'Customer Education',trends:'Trends & Health',snapshot:'Handover Snapshot'};
+  document.getElementById('tt').textContent=titles[id]||id;
+}
+
+function oc(id){
+  const c=C[id];if(!c)return;
+  document.getElementById('dp-name').textContent=c.name;
+  const hc=c.health>70?'hg':c.health>45?'ha':'hr';
+  const hcolor=c.health>70?'var(--green)':c.health>45?'var(--amber)':'var(--red)';
+  document.getElementById('dp-badges').innerHTML=
+    `<span class="tier-badge ${c.tier==='Premier'?'tp':c.tier==='Strategic'?'ts':'tsc'}">${c.tier}</span>
+     <span class="infra-badge ${c.infra==='New'?'in':c.infra==='Old'?'io':'im'}">${c.infra} Infra</span>
+     <span style="font-size:10px;color:var(--text3)">${c.csm} · ${c.arr}</span>`;
+  document.getElementById('dp-health').innerHTML=
+    `<div class="health-dot ${hc}"></div>
+     <span style="font-size:11px;font-weight:700;color:${hcolor}">Health ${c.health}/100</span>
+     <span style="font-size:10px;color:var(--text3)">·</span>
+     <span style="font-size:10px;color:${c.churn==='High'||c.churn==='Critical'?'var(--red)':'var(--text3)'}">Churn risk: ${c.churn}</span>
+     <span style="font-size:10px;color:var(--text3)">· Renews: ${c.renewal}</span>
+     <span style="font-size:10px;color:${c.sentiment==='Frustrated'||c.sentiment==='Escalating'?'var(--red)':c.sentiment==='Happy'?'var(--green)':'var(--text3)'}">· ${c.sentiment}</span>`;
+
+  document.getElementById('dp-commercial').innerHTML=
+    `<div class="fr">Product <span style="color:var(--text)">${c.product}</span></div>
+     <div class="fr">Plan <span style="color:var(--text)">${c.plan}</span></div>
+     <div class="fr">Region <span style="color:var(--text)">${c.region}</span></div>
+     <div class="fr">Timezone <span style="color:var(--text)">${c.tz}</span></div>
+     <div class="fr">Contacts <span style="color:var(--text)">${c.contacts}</span></div>
+     <div class="fr">SLA <span style="color:var(--text)">${c.sla}</span></div>
+     <div class="fr">Seats <span style="color:var(--text)">${c.seats}</span></div>
+     <div class="fr">SSO <span style="color:var(--text)">${c.sso}</span></div>
+     <div class="fr">Integrations <span style="color:${c.integrations!=='None'?'var(--amber)':'var(--text3)'}">${c.integrations}</span></div>
+     <div class="fr">API Customer <span style="${c.api?'color:var(--green);font-weight:700':'color:var(--text3)'}">${c.api?'YES':'No'}</span></div>
+     <div class="fr">Upgrades Used <span style="color:${c.upgradesUsed>=c.upgradesLimit?'var(--red)':c.upgradesUsed>c.upgradesLimit*0.7?'var(--amber)':'var(--green)'}">${c.upgradesUsed}/${c.upgradesLimit}</span></div>
+     <div class="fr">WildFly 8 <span style="${c.wf8?'color:var(--amber);font-weight:700':'color:var(--text3)'}">${c.wf8?'Active — check after migration':'No'}</span></div>`;
+
+  document.getElementById('dp-envs').innerHTML=
+    `<div class="ec"><div class="ec-h"><span class="env-badge ep">PROD</span><span style="font-weight:700;color:var(--text);font-size:11px">${id}.dataloy.com</span><span class="vm" style="margin-left:auto;color:${c.prodVer<'8.23'?'var(--red)':'var(--text2)'}">${c.prodVer}</span><span class="infra-badge ${c.infra==='New'?'in':'io'}" style="margin-left:6px">${c.infra}</span></div><div class="fg"><div class="fr">Pure Web<span class="${c.sso!=='None'?'fon':'fof'}">${c.sso!=='None'?'ON':'OFF'}</span></div><div class="fr">Auth0<span class="${c.sso==='Auth0'?'fon':'fof'}">${c.sso==='Auth0'?'ON':'OFF'}</span></div><div class="fr">JVMS<span class="fof">OFF</span></div><div class="fr">Azure<span class="fof">OFF</span></div></div></div>
+     <div class="ec"><div class="ec-h"><span class="env-badge et">TEST</span><span style="font-weight:700;color:var(--text);font-size:11px">${id}-test.dataloy.com</span><span class="vm" style="margin-left:auto">${c.testVer}</span></div></div>`;
+
+  document.getElementById('dp-sched').innerHTML=
+    `<div class="fg"><div class="fr">Preferred days<span style="color:var(--text)">${c.prefDays}</span></div><div class="fr">Notice required<span style="color:var(--text)">${c.notice}</span></div><div class="fr">Blackout periods<span style="color:${c.blackout!=='None'?'var(--amber)':'var(--text3)'}">${c.blackout}</span></div><div class="fr">Preferred channel<span style="color:var(--text)">Email</span></div></div>`;
+
+  document.getElementById('dp-cases').innerHTML=c.cases.length?c.cases.map(t=>`
+    <div class="jr">
+      <span class="jref">↗ ${t.ref}</span>
+      <div style="flex:1">
+        <div class="jtitle">${t.title}</div>
+        ${t.defectStatus?`<div style="font-size:9px;color:var(--amber);margin-top:2px">Dev: ${t.defectStatus}</div>`:''}
+        ${t.rootCause?`<div style="font-size:9px;color:var(--purple);margin-top:2px">Root cause: ${t.rootCause}</div>`:''}
+      </div>
+      <span class="env-badge ${t.env==='PROD'?'ep':t.env==='TEST'?'et':'ed'}">${t.env}</span>
+      <span class="jst" style="color:${t.status.includes('Awaiting')?'var(--amber)':'var(--text3)'}">${t.status}</span>
+      <span style="font-size:9px;color:var(--text3)">${t.days}d</span>
+    </div>`).join(''):'<div style="color:var(--text3);font-size:11px;padding:8px 0">No cases linked.</div>';
+
+  document.getElementById('dp-upgrades').innerHTML=c.upgrades.map(u=>`
+    <div class="jr">
+      <span class="env-badge ${u.env==='PROD'?'ep':u.env==='TEST'?'et':'ed'}">${u.env}</span>
+      <span class="jtitle">${u.from} → ${u.to}</span>
+      <span class="jst">${u.date}</span>
+      <span class="jst" style="color:${u.status==='Verified'?'var(--green)':'var(--amber)'}">${u.status}</span>
+      <span style="font-size:9px;color:var(--text3)">${u.source}</span>
+    </div>`).join('');
+
+  const m=c.mig;
+  const migColor=m.status==='Complete'?'var(--green)':m.status==='In Progress'?'var(--teal)':m.stalled?'var(--red)':'var(--amber)';
+  document.getElementById('dp-mig').innerHTML=`
+    <div class="ec">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:800;color:${migColor}">${m.status}</span>
+        ${m.stalled?`<span class="flag-pill fst">⏱ ${m.stalledDays}d stalled</span>`:''}
+        ${m.requiresUpgrade?'<span class="flag-pill fup">⬆ Upgrade first (below 8.23)</span>':''}
+        ${m.ip?'<span class="flag-pill fip">🔒 IP/FW — extended checklist</span>':''}
+      </div>
+      <div class="fg">
+        <div class="fr">Complexity<span style="color:${m.complexity==='Very High'||m.complexity==='High'?'var(--red)':'var(--green)'}">${m.complexity}</span></div>
+        <div class="fr">Assignee<span style="color:var(--text)">${m.assignee||'Unassigned'}</span></div>
+        ${m.downtime?`<div class="fr">Downtime<span style="color:var(--green)">${m.downtime}</span></div>`:''}
+      </div>
+      ${(m.ipNotes||m.integrations)?`<div style="margin-top:10px;padding:9px;background:var(--amber-dim);border:1px solid rgba(240,160,48,.2);border-radius:6px;font-size:10px;color:var(--amber)">${m.ipNotes||m.integrations}</div>`:''}
+    </div>`;
+
+  document.getElementById('dp-edu').innerHTML=`
+    ${c.gaps.length?`<div style="margin-bottom:12px"><div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--purple);margin-bottom:6px">Known Training Gaps</div>${c.gaps.map(g=>`<span style="display:inline-block;background:var(--purple-dim);color:var(--purple);border:1px solid rgba(155,108,245,.2);border-radius:4px;padding:2px 8px;font-size:10px;margin:2px;">${g}</span>`).join('')}</div>`:''}
+    ${c.edu.length?c.edu.map(e=>`<div class="jr"><div style="flex:1"><div class="jtitle">${e.topic}</div><div style="font-size:9px;color:var(--text3)">${e.format} · ${e.date}</div></div><span class="jst" style="color:${e.followUp?'var(--amber)':'var(--green)'}">${e.outcome}</span></div>`).join(''):'<div style="color:var(--text3);font-size:11px;padding:8px 0">No training sessions logged.</div>'}`;
+
+  document.getElementById('dp-timeline').innerHTML=`<div style="padding-top:4px">${c.timeline.map(t=>`<div class="tl-item"><div class="tl-dot" style="background:${t.col}"></div><div class="tl-content"><div class="tl-what">${t.what}</div><div class="tl-when">${t.when}</div></div></div>`).join('')}</div>`;
+
+  document.getElementById('dp-notes').innerHTML=c.notes.map(n=>`<div style="padding:9px 0;border-bottom:1px solid var(--border)"><div style="font-size:11px;color:var(--text);margin-bottom:2px">${n.text}</div><div style="font-size:9px;color:var(--text3)">${n.date}</div></div>`).join('');
+
+  // reset tabs
+  document.querySelectorAll('.dt').forEach(t=>t.classList.remove('active'));
+  document.querySelector('.dt').classList.add('active');
+  ['to','tc','tu','tm','te','ttl','tn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=id==='to'?'block':'none'});
+
+  document.getElementById('dp').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+function cd(){document.getElementById('dp').classList.remove('open');document.getElementById('overlay').classList.remove('open')}
+
+function st(el,tabId){
+  document.querySelectorAll('.dt').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  ['to','tc','tu','tm','te','ttl','tn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display=id===tabId?'block':'none'});
+}
+
+function conn(){
+  const v=document.getElementById('ti').value.trim();
+  const r=document.getElementById('cr');
+  if(!v){r.textContent='Enter a tenant ID first.';return}
+  r.innerHTML=`<span style="color:var(--amber)">Connecting to ${v}.dataloy.com/ws/rest/dataloy/info...</span>`;
+  setTimeout(()=>{r.innerHTML=`<span style="color:var(--green)">✓ Connected · Version 8.10.4-R · Environment: TEST · Pure Web: ON · Auth0: ON · Thread Map: -5 ⚠</span>`},1100);
+}
+</script>
+</body>
+</html>
