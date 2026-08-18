@@ -56,9 +56,15 @@
         <div class="topbar-sub">Your L2 operational hub · {{ today }}</div>
       </div>
       <div class="topbar-right">
-        <div class="spill"><div class="dot" style="background:var(--red)"></div>4 SLA breaching</div>
-        <div class="spill"><div class="dot" style="background:var(--amber)"></div>3 awaiting dev</div>
-        <div class="spill"><div class="dot" style="background:var(--green)"></div>2 done today</div>
+        <div class="spill" v-if="triage">
+          <div class="dot" style="background:var(--red)"></div>{{ triage.sla_breaching }} SLA breaching
+        </div>
+        <div class="spill" v-if="triage">
+          <div class="dot" style="background:var(--amber)"></div>{{ triage.awaiting_dev }} awaiting dev
+        </div>
+        <div class="spill" v-if="triage">
+          <div class="dot" style="background:var(--green)"></div>{{ triage.resolved_today }} done today
+        </div>
         <RouterLink to="/snapshot">
           <button class="btn btn-g btn-sm">📋 Snapshot</button>
         </RouterLink>
@@ -70,10 +76,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { api, type TriageStats } from '@/api/client'
 
 const route = useRoute()
+const triage = ref<TriageStats | null>(null)
+
+onMounted(async () => {
+  try {
+    const res = await api.cases.triage()
+    triage.value = res.data
+  } catch { /* non-fatal */ }
+})
 
 const titles: Record<string, string> = {
   '/triage':    'Triage Queue',

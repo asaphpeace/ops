@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.scheduler import init_scheduler
 from app.routers import health
+from app.routers import customers, cases, upgrades, releases, seed, migrations, education
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,8 +39,15 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(customers.router)
+app.include_router(cases.router)
+app.include_router(upgrades.router)
+app.include_router(releases.router)
+app.include_router(migrations.router)
+app.include_router(education.router)
+app.include_router(seed.router)
 
 
 @app.get("/")
 async def root():
-    return {"service": "sedna-ops", "version": "0.1.0", "phase": 0}
+    return {"service": "sedna-ops", "version": "0.1.0", "phase": 1}
