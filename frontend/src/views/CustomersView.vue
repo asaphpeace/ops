@@ -26,9 +26,9 @@
         <div class="sub">renewing within 60d</div>
       </div>
       <div class="sc warn">
-        <div class="lbl">Total ARR</div>
-        <div class="val">{{ formatArr(totalArr) }}</div>
-        <div class="sub">{{ stats?.total ?? '—' }} customers</div>
+        <div class="lbl">ARR — Open Defects</div>
+        <div class="val">{{ formatArr(stats?.arr_open_defects) }}</div>
+        <div class="sub">customers affected</div>
       </div>
     </div>
 
@@ -62,7 +62,8 @@
         <thead>
           <tr>
             <th>Health</th><th>Customer</th><th>Tier</th><th>CSM</th><th>ARR</th>
-            <th>Prod Version</th><th>Infra</th><th>Open Cases</th><th>Renewal</th><th>Migration</th>
+            <th>Prod Version</th><th>Infra</th><th>Days Since Upgrade</th><th>Upgrades</th>
+            <th>Renewal</th><th>Open Cases</th><th>Migration</th>
           </tr>
         </thead>
         <tbody>
@@ -79,15 +80,22 @@
             <td>{{ formatArr(c.arr_gbp) }}</td>
             <td class="vm" :style="versionColor(c.prod_version)">{{ c.prod_version ?? '—' }}</td>
             <td><span :class="['infra-badge', infraClass(c.infra)]">{{ c.infra }}</span></td>
-            <td>{{ openCasesFor(c.id) }}</td>
+            <td :style="daysSinceColor(daysSinceUpgrade(c.id))">{{ daysSinceLabel(c.id) }}</td>
+            <td>
+              <div class="ub">
+                <div class="bt"><div :class="['bf', upgradeBarClass(c)]" :style="{ width: upgradeBarWidth(c) }"></div></div>
+                <span style="font-size:9px" :style="upgradeUsageColor(c)">{{ c.upgrades_used }}/{{ c.upgrades_limit }}</span>
+              </div>
+            </td>
             <td :style="renewalColor(c.renewal_date)">{{ formatRenewal(c.renewal_date) }}</td>
+            <td>{{ openCasesFor(c.id) }}</td>
             <td><span :class="migClass(c.id)">{{ migStatus(c.id) }}</span></td>
           </tr>
           <tr v-if="loading">
-            <td colspan="10" style="text-align:center;color:var(--text3);padding:20px">Loading customers…</td>
+            <td colspan="12" style="text-align:center;color:var(--text3);padding:20px">Loading customers…</td>
           </tr>
           <tr v-else-if="!filtered.length">
-            <td colspan="10" style="text-align:center;color:var(--text3);padding:20px">No customers match filters.</td>
+            <td colspan="12" style="text-align:center;color:var(--text3);padding:20px">No customers match filters.</td>
           </tr>
         </tbody>
       </table>
@@ -167,10 +175,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api, type Customer, type Case, type CustomerStats } from '@/api/client'
+import { api, type Customer, type Case, type CustomerStats, type Upgrade } from '@/api/client'
 
 const customers = ref<Customer[]>([])
 const allCases = ref<Case[]>([])
+const allUpgrades = ref<Upgrade[]>([])
 const stats = ref<CustomerStats | null>(null)
 const loading = ref(true)
 
@@ -193,22 +202,22 @@ const tabs = [
 
 onMounted(async () => {
   try {
-    const [custRes, casesRes, statsRes] = await Promise.all([
+    const [custRes, casesRes, statsRes, upgRes] = await Promise.all([
       api.customers.list(),
       api.cases.list(),
       api.customers.stats(),
+      api.upgrades.list(),
     ])
     customers.value = custRes.data
     allCases.value = casesRes.data
     stats.value = statsRes.data
+    allUpgrades.value = upgRes.data
   } finally {
     loading.value = false
   }
 })
 
 const csms = computed(() => [...new Set(customers.value.map(c => c.csm))].sort())
-
-const totalArr = computed(() => customers.value.reduce((a, c) => a + c.arr_gbp, 0))
 
 const filtered = computed(() =>
   customers.value.filter(c => {
@@ -300,6 +309,37 @@ function versionColor(v?: string | null) {
 function upgradeUsageColor(c: Customer) {
   if (c.upgrades_used >= c.upgrades_limit) return 'color:var(--red)'
   if (c.upgrades_used > c.upgrades_limit * 0.7) return 'color:var(--amber)'
+  return 'color:var(--text3)'
+}
+
+function upgradeBarClass(c: Customer) {
+  if (c.upgrades_used >= c.upgrades_limit) return 'da'
+  if (c.upgrades_used >= c.upgrades_limit * 0.7) return 'wa'
+  return ''
+}
+
+function upgradeBarWidth(c: Customer) {
+  if (!c.upgrades_limit) return '0%'
+  return `${Math.min(100, Math.round(c.upgrades_used / c.upgrades_limit * 100))}%`
+}
+
+function daysSinceUpgrade(customerId: number): number | null {
+  const done = allUpgrades.value
+    .filter(u => u.customer_id === customerId && u.stage === 'Verified Done' && u.environment === 'PROD' && u.date_done)
+    .sort((a, b) => new Date(b.date_done!).getTime() - new Date(a.date_done!).getTime())
+  if (!done.length) return null
+  return Math.floor((Date.now() - new Date(done[0].date_done!).getTime()) / 86400000)
+}
+
+function daysSinceLabel(customerId: number) {
+  const d = daysSinceUpgrade(customerId)
+  return d == null ? 'Never' : `${d}d`
+}
+
+function daysSinceColor(days: number | null) {
+  if (days == null) return 'color:var(--text3)'
+  if (days > 365) return 'color:var(--red)'
+  if (days > 90) return 'color:var(--amber)'
   return 'color:var(--green)'
 }
 </script>

@@ -23,6 +23,7 @@ def _enrich_session(s: TrainingSession) -> dict:
     if s.customer:
         d["customer_name"] = s.customer.name
         d["customer_tier"] = s.customer.tier
+        d["customer_csm"] = s.customer.csm
     return d
 
 

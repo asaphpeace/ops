@@ -65,26 +65,93 @@
     </div>
 
     <div v-if="loading" class="info-bar">Loading pipeline…</div>
+
+    <!-- WEEK CALENDAR -->
+    <div v-if="!loading" class="sh" style="margin-top:4px">
+      <div><h2>This Week's Slots</h2><p>Scheduled upgrades for the week · all times local to customer</p></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-g btn-sm">← Prev</button>
+        <button class="btn btn-g btn-sm">Next →</button>
+      </div>
+    </div>
+    <div v-if="!loading" class="wc">
+      <div class="wc-h">
+        <div v-for="day in weekDays" :key="day.key" class="dc-h">
+          {{ day.label }}<span class="t">{{ day.slot }}</span>
+        </div>
+      </div>
+      <div class="wc-b">
+        <div v-for="day in weekDays" :key="day.key" class="dc">
+          <template v-if="scheduledForDay(day.date).length">
+            <div v-for="u in scheduledForDay(day.date)" :key="u.id"
+                 :class="['cs', u.confirmed_at ? '' : 'unc']">
+              <div class="ct" style="margin-bottom:3px">
+                <span :class="['env-badge', u.environment === 'PROD' ? 'ep' : 'et']">{{ u.environment }}</span>
+                <span v-if="!u.confirmed_at" style="font-size:8px;color:var(--amber)">⚠ unconfirmed</span>
+              </div>
+              <div class="sn">{{ u.customer_name }}</div>
+              <div class="sd">→ {{ u.to_version }} · {{ u.jira_ref }}</div>
+            </div>
+          </template>
+          <div v-else class="ce">+ Add upgrade</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api } from '@/api/client'
+import { api, type Upgrade } from '@/api/client'
 
 const pipeline = ref<any>(null)
+const allUpgrades = ref<Upgrade[]>([])
 const loading = ref(true)
 
 const stages = ['Requested', 'DevOps Approval', 'Cust. Confirmed', 'Scheduled', 'Verified Done']
 
 onMounted(async () => {
   try {
-    const res = await api.upgrades.pipeline()
-    pipeline.value = res.data
+    const [pipeRes, upgRes] = await Promise.all([
+      api.upgrades.pipeline(),
+      api.upgrades.list({ stage: 'Scheduled' }),
+    ])
+    pipeline.value = pipeRes.data
+    allUpgrades.value = upgRes.data
   } finally {
     loading.value = false
   }
 })
+
+// Build Mon–Fri of the current week
+const weekDays = computed(() => {
+  const now = new Date()
+  const dayOfWeek = now.getDay() // 0=Sun
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  const slots = ['1:00 PM', '9:30 AM', '10:00 AM', '9:30 AM', '11:30 AM']
+  return days.map((d, i) => {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + i)
+    return {
+      key: d,
+      label: `${d} ${date.getDate()} ${date.toLocaleDateString('en-GB', { month: 'short' })}`,
+      slot: slots[i],
+      date,
+    }
+  })
+})
+
+function scheduledForDay(date: Date) {
+  return allUpgrades.value.filter(u => {
+    if (!u.scheduled_at) return false
+    const d = new Date(u.scheduled_at)
+    return d.getFullYear() === date.getFullYear() &&
+           d.getMonth() === date.getMonth() &&
+           d.getDate() === date.getDate()
+  })
+}
 
 const blockedUpgrades = computed(() => {
   if (!pipeline.value) return []

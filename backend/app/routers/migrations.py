@@ -36,6 +36,7 @@ def _enrich(m: MigrationProject) -> dict:
         d["customer_infra"] = m.customer.infra
         d["customer_arr_gbp"] = m.customer.arr_gbp
         d["customer_renewal_date"] = m.customer.renewal_date.isoformat() if m.customer.renewal_date else None
+        d["customer_prod_version"] = m.customer.prod_version
     return d
 
 

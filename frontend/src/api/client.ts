@@ -153,6 +153,7 @@ export interface MigrationProject {
   completed_at: string | null
   ip_notes: string | null
   integration_notes: string | null
+  customer_prod_version: string | null
 }
 
 export interface MigrationBoard {
@@ -190,6 +191,7 @@ export interface TrainingSession {
   outcome: string | null
   follow_up_needed: boolean
   follow_up_text: string | null
+  customer_csm: string | null
 }
 
 export interface EducationStats {
