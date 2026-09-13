@@ -24,6 +24,7 @@ import { defineAsyncComponent } from 'vue'
 const tabs = [
   { id: 'customers', label: 'Customers' },
   { id: 'csm-risk', label: 'CSM Renewal Risk' },
+  { id: 'sso-posture', label: 'SSO Posture' },
   { id: 'trends', label: 'Trends' },
   { id: 'education', label: 'Education' },
 ] as const
@@ -32,6 +33,7 @@ type TabId = typeof tabs[number]['id']
 const components: Record<TabId, ReturnType<typeof defineAsyncComponent>> = {
   customers: defineAsyncComponent(() => import('@/views/CustomersView.vue')),
   'csm-risk': defineAsyncComponent(() => import('@/views/CsmRenewalView.vue')),
+  'sso-posture': defineAsyncComponent(() => import('@/views/SsoPostureView.vue')),
   trends: defineAsyncComponent(() => import('@/views/TrendsView.vue')),
   education: defineAsyncComponent(() => import('@/views/EducationView.vue')),
 }
