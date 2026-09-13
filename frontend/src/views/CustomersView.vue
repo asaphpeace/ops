@@ -3,33 +3,94 @@
     <div class="sh">
       <div><h2>Customer Intelligence</h2><p>Every customer · full context · click to open 360 view</p></div>
       <div style="display:flex;gap:6px">
+        <RouterLink to="/customers/comms" class="btn btn-g btn-sm" style="text-decoration:none">📢 Customer Comms</RouterLink>
+        <button class="btn btn-g btn-sm" @click="showDiscovery = true">🔍 Discover Tenants</button>
         <button class="btn btn-g btn-sm">Import CSV</button>
-        <button class="btn">+ Add Customer</button>
+        <button class="btn" @click="toggleAddForm">{{ showAddForm ? '✕ Cancel' : '+ Add Customer' }}</button>
       </div>
     </div>
 
-    <!-- ARR Risk Strip -->
+    <TenantDiscoveryModal :open="showDiscovery" @close="showDiscovery = false" />
+
+    <!-- Add Customer Form -->
+    <div v-if="showAddForm" style="background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px">New Customer</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">Name *</label>
+          <input class="inp" style="width:200px" placeholder="Acme Shipping Ltd" v-model="newCustomer.name" @input="confirmedDuplicate = false">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">Tier</label>
+          <select class="sel" v-model="newCustomer.tier">
+            <option>Premier</option>
+            <option>Strategic</option>
+            <option>Scale</option>
+          </select>
+          <span style="font-size:8.5px;color:var(--text3)">{{ tierUpgradeLimit(newCustomer.tier) }} upgrades/yr</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">CSM *</label>
+          <input class="inp" style="width:100px" placeholder="Asaph" v-model="newCustomer.csm">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">ARR (GBP)</label>
+          <input class="inp" type="number" style="width:90px" placeholder="50000" v-model.number="newCustomer.arr_gbp">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">Infra</label>
+          <select class="sel" style="width:80px" v-model="newCustomer.infra">
+            <option>Old</option>
+            <option>New</option>
+            <option>Mixed</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:9px;color:var(--text3)">Prod Version</label>
+          <input class="inp" style="width:100px" placeholder="8.30.0-R" v-model="newCustomer.prod_version">
+        </div>
+        <button class="btn"
+          :disabled="!newCustomer.name || !newCustomer.csm || creatingCustomer || (!!duplicateMatch && !confirmedDuplicate)"
+          @click="addCustomer">
+          {{ creatingCustomer ? 'Adding…' : (duplicateMatch && !confirmedDuplicate) ? 'Name already exists' : 'Add' }}
+        </button>
+      </div>
+      <div v-if="duplicateMatch && !confirmedDuplicate" class="alert-bar" style="margin-top:10px;display:flex;align-items:center;gap:10px;font-size:11px">
+        ⚠ A customer named "{{ duplicateMatch.name }}" already exists ({{ duplicateMatch.tier }}, CSM {{ duplicateMatch.csm }}) — likely the same one, not a new customer.
+        <button class="btn btn-g btn-sm" style="margin-left:auto" @click="confirmedDuplicate = true">Add anyway</button>
+      </div>
+    </div>
+
+    <!-- Infrastructure Strip — replaced the old ARR-denominated strip.
+         All 4 cards are scoped to real VMS customers (product ILIKE '%VMS%'),
+         not the full active-customer list — confirmed live that `infra` is
+         a leftover/default field on non-VMS accounts too (533 of 558 active
+         customers show infra="Old", but only 53 of those are actually VMS
+         customers with real AWS infrastructure to migrate at all). Version
+         data (CustomerTenantInfo, since Customer.prod_version is fake seed
+         data) is real but sparse, so it's reported with an honest "of known"
+         subtitle rather than pretending fleet-wide coverage. -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-      <div class="sc alert">
-        <div class="lbl">ARR on Old Infra</div>
-        <div class="val">{{ formatArr(stats?.arr_old_infra) }}</div>
-        <div class="sub">{{ stats?.old_infra_count ?? '—' }} customers</div>
+      <div class="sc alert" style="cursor:pointer" @click="filterInfra = 'Old'; vmsOnly = true" title="Filter the list to Old infra, VMS customers only">
+        <div class="lbl">On Old Infra</div>
+        <div class="val">{{ stats?.vms_old_infra_count ?? '—' }}</div>
+        <div class="sub">of {{ stats?.vms_customer_count ?? 0 }} VMS customers still to migrate</div>
       </div>
-      <div class="sc alert">
-        <div class="lbl">ARR — Red Health</div>
-        <div class="val">{{ formatArr(stats?.arr_red_health) }}</div>
-        <div class="sub">{{ stats?.red_health_count ?? '—' }} customers</div>
-      </div>
-      <div class="sc warn">
-        <div class="lbl">ARR at Renewal Risk</div>
-        <div class="val">{{ formatArr(stats?.arr_renewal_risk) }}</div>
-        <div class="sub">renewing within 60d</div>
-      </div>
-      <div class="sc warn">
-        <div class="lbl">ARR — Open Defects</div>
-        <div class="val">{{ formatArr(stats?.arr_open_defects) }}</div>
-        <div class="sub">customers affected</div>
-      </div>
+      <RouterLink to="/operations?tab=migrations" class="sc" style="text-decoration:none;color:inherit;display:block">
+        <div class="lbl">Migration In Progress</div>
+        <div class="val">{{ stats?.migration_active_count ?? '—' }}</div>
+        <div class="sub">active migration projects, VMS customers</div>
+      </RouterLink>
+      <RouterLink to="/operations?tab=migrations" class="sc warn" style="text-decoration:none;color:inherit;display:block">
+        <div class="lbl">Stalled Migrations</div>
+        <div class="val">{{ stats?.stalled_migration_count ?? '—' }}</div>
+        <div class="sub">VMS customers, no movement, needs a nudge</div>
+      </RouterLink>
+      <RouterLink to="/releases" class="sc warn" style="text-decoration:none;color:inherit;display:block" title="See Release Intelligence's Customers Below This Version panel">
+        <div class="lbl">Confirmed Outdated</div>
+        <div class="val">{{ stats?.confirmed_outdated_count ?? '—' }}</div>
+        <div class="sub">of {{ stats?.tenant_known_count ?? 0 }} of {{ stats?.vms_customer_count ?? 0 }} VMS customers with known version data</div>
+      </RouterLink>
     </div>
 
     <div class="tw">
@@ -57,27 +118,44 @@
           <option value="amber">Amber (45–70)</option>
           <option value="green">Green (&gt;70)</option>
         </select>
+        <select class="sel" v-model="filterEngagement" title="Real last-support-case date, refreshed weekly from live Jira">
+          <option value="">All engagement</option>
+          <option value="quiet">Quiet (6mo+)</option>
+          <option value="dormant">Dormant (12mo+)</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);white-space:nowrap;cursor:pointer" title="Hides Email-only, CompassAir-only, and no-product-tagged customers — everyone whose product tag doesn't include VMS">
+          <input type="checkbox" v-model="vmsOnly">
+          VMS customers only
+        </label>
       </div>
       <table>
         <thead>
           <tr>
-            <th>Health</th><th>Customer</th><th>Tier</th><th>CSM</th><th>ARR</th>
-            <th>Prod Version</th><th>Infra</th><th>Days Since Upgrade</th><th>Upgrades</th>
-            <th>Renewal</th><th>Open Cases</th><th>Migration</th>
+            <th v-for="col in columns" :key="col.key" class="sortable" @click="toggleSort(col.key)">
+              {{ col.label }}<span class="sort-arrow" v-if="sortKey === col.key">{{ sortDir === 1 ? '▲' : '▼' }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in filtered" :key="c.id" @click="openPanel(c)">
+          <tr v-for="c in sorted" :key="c.id" class="cust-row" @click="openCustomer(c.id)">
             <td>
               <div class="hc-mini">
                 <div :class="['health-dot', healthDot(c.health_score)]"></div>
                 <span class="hc-score" :style="healthColor(c.health_score)">{{ c.health_score }}</span>
               </div>
             </td>
-            <td class="td-name">{{ c.name }}</td>
+            <td class="td-name">
+              {{ c.name }}
+              <span v-if="c.jvm_client" class="jvm-badge" title="Still on the old Java desktop client, not the web app">JVM</span>
+              <span
+                v-if="engagementTier(c.last_case_activity_at)"
+                :class="['dormant-badge', engagementTier(c.last_case_activity_at)]"
+                :title="c.last_case_activity_at ? `Last case: ${formatRenewal(c.last_case_activity_at)}` : 'No case on record'"
+              >{{ engagementTier(c.last_case_activity_at) === 'dormant' ? 'Dormant' : 'Quiet' }}</span>
+            </td>
             <td><span :class="['tier-badge', tierClass(c.tier)]">{{ c.tier }}</span></td>
             <td>{{ c.csm }}</td>
-            <td>{{ formatArr(c.arr_gbp) }}</td>
+            <td>{{ planName(c.tier) }}</td>
             <td class="vm" :style="versionColor(c.prod_version)">{{ c.prod_version ?? '—' }}</td>
             <td><span :class="['infra-badge', infraClass(c.infra)]">{{ c.infra }}</span></td>
             <td :style="daysSinceColor(daysSinceUpgrade(c.id))">{{ daysSinceLabel(c.id) }}</td>
@@ -89,7 +167,7 @@
             </td>
             <td :style="renewalColor(c.renewal_date)">{{ formatRenewal(c.renewal_date) }}</td>
             <td>{{ openCasesFor(c.id) }}</td>
-            <td><span :class="migClass(c.id)">{{ migStatus(c.id) }}</span></td>
+            <td><span :style="migStyle(c.id)">{{ migStatus(c.id) }}</span></td>
           </tr>
           <tr v-if="loading">
             <td colspan="12" style="text-align:center;color:var(--text3);padding:20px">Loading customers…</td>
@@ -100,86 +178,25 @@
         </tbody>
       </table>
     </div>
-
-    <!-- Customer Detail Panel -->
-    <div :class="['overlay', panelOpen ? 'open' : '']" @click="closePanel"></div>
-    <div :class="['dp', panelOpen ? 'open' : '']" v-if="selected">
-      <div class="dp-h" style="position:relative">
-        <button class="cbx" @click="closePanel">✕</button>
-        <h3>{{ selected.name }}</h3>
-        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
-          <span :class="['tier-badge', tierClass(selected.tier)]">{{ selected.tier }}</span>
-          <span :class="['infra-badge', infraClass(selected.infra)]">{{ selected.infra }} Infra</span>
-          <span style="font-size:10px;color:var(--text3)">{{ selected.csm }} · {{ formatArr(selected.arr_gbp) }}</span>
-        </div>
-        <div style="margin-top:6px;display:flex;gap:6px;align-items:center">
-          <div :class="['health-dot', healthDot(selected.health_score)]"></div>
-          <span style="font-size:11px;font-weight:700" :style="healthColor(selected.health_score)">Health {{ selected.health_score }}/100</span>
-          <span style="font-size:10px;color:var(--text3)">·</span>
-          <span style="font-size:10px" :style="churnColor(selected.churn_risk)">Churn risk: {{ selected.churn_risk }}</span>
-          <span style="font-size:10px;color:var(--text3)">· Renews: {{ formatRenewal(selected.renewal_date) }}</span>
-          <span style="font-size:10px" :style="sentimentColor(selected.sentiment)">· {{ selected.sentiment }}</span>
-        </div>
-      </div>
-      <div class="dp-tabs">
-        <div v-for="tab in tabs" :key="tab.id" :class="['dt', activeTab === tab.id ? 'active' : '']" @click="activeTab = tab.id">{{ tab.label }}</div>
-      </div>
-      <div class="dp-body">
-        <!-- Overview -->
-        <div v-if="activeTab === 'overview'">
-          <div class="ds"><h4>Commercial</h4>
-            <div class="fg">
-              <div class="fr">Product <span style="color:var(--text)">{{ selected.product }}</span></div>
-              <div class="fr">Plan <span style="color:var(--text)">{{ selected.plan }}</span></div>
-              <div class="fr">Region <span style="color:var(--text)">{{ selected.region }}</span></div>
-              <div class="fr">Timezone <span style="color:var(--text)">{{ selected.timezone }}</span></div>
-              <div class="fr">Contacts <span style="color:var(--text)">{{ selected.contacts }}</span></div>
-              <div class="fr">SLA <span style="color:var(--text)">{{ selected.sla_tier }}</span></div>
-              <div class="fr">Seats <span style="color:var(--text)">{{ selected.seats }}</span></div>
-              <div class="fr">SSO <span style="color:var(--text)">{{ selected.sso }}</span></div>
-              <div class="fr">Integrations <span :style="selected.integrations !== 'None' ? 'color:var(--amber)' : ''">{{ selected.integrations }}</span></div>
-              <div class="fr">API Customer <span :style="selected.api_customer ? 'color:var(--green);font-weight:700' : 'color:var(--text3)'">{{ selected.api_customer ? 'YES' : 'No' }}</span></div>
-              <div class="fr">Upgrades Used <span :style="upgradeUsageColor(selected)">{{ selected.upgrades_used }}/{{ selected.upgrades_limit }}</span></div>
-              <div class="fr">WildFly 8 <span :style="selected.wildfly8 ? 'color:var(--amber);font-weight:700' : 'color:var(--text3)'">{{ selected.wildfly8 ? 'Active — check after migration' : 'No' }}</span></div>
-            </div>
-          </div>
-          <div class="ds"><h4>Scheduling Preferences</h4>
-            <div class="fg">
-              <div class="fr">Preferred days <span style="color:var(--text)">{{ selected.pref_days }}</span></div>
-              <div class="fr">Notice required <span style="color:var(--text)">{{ selected.notice_required }}</span></div>
-              <div class="fr">Blackout periods <span :style="selected.blackout_periods && selected.blackout_periods !== 'None' ? 'color:var(--amber)' : ''">{{ selected.blackout_periods }}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cases tab -->
-        <div v-if="activeTab === 'cases'">
-          <div class="info-bar">Jira links — local status tracked here.</div>
-          <div v-if="customerCases.length === 0" style="color:var(--text3);font-size:11px;padding:8px 0">No cases linked.</div>
-          <div v-for="c in customerCases" :key="c.id" class="jr">
-            <span class="jref">↗ {{ c.jira_ref }}</span>
-            <div style="flex:1">
-              <div class="jtitle">{{ c.title }}</div>
-              <div v-if="c.defect_status" style="font-size:9px;color:var(--amber);margin-top:2px">Dev: {{ c.defect_status }}</div>
-              <div v-if="c.root_cause" style="font-size:9px;color:var(--purple);margin-top:2px">Root cause: {{ c.root_cause }}</div>
-            </div>
-            <span :class="['env-badge', envClass(c.environment)]">{{ c.environment }}</span>
-            <span class="jst" :style="c.status.includes('Awaiting') ? 'color:var(--amber)' : ''">{{ c.status }}</span>
-            <span style="font-size:9px;color:var(--text3)">{{ c.days_open }}d</span>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api, type Customer, type Case, type CustomerStats, type Upgrade } from '@/api/client'
+import { api, planName, engagementTier, type Customer, type CustomerStats, type Upgrade, type MigrationProject } from '@/api/client'
+import { useCustomerDrill } from '@/composables/useCustomerDrill'
+import TenantDiscoveryModal from '@/components/TenantDiscoveryModal.vue'
+
+const showDiscovery = ref(false)
+
+const { openCustomer } = useCustomerDrill()
 
 const customers = ref<Customer[]>([])
-const allCases = ref<Case[]>([])
+// Real, live-Jira open-case count per customer_id — replaced the old
+// allCases-based local-table count (see openCasesFor() below).
+const openCaseCounts = ref<Record<number, number>>({})
 const allUpgrades = ref<Upgrade[]>([])
+const allMigrations = ref<MigrationProject[]>([])
 const stats = ref<CustomerStats | null>(null)
 const loading = ref(true)
 
@@ -188,30 +205,57 @@ const filterTier = ref('')
 const filterCsm = ref('')
 const filterInfra = ref('')
 const filterHealth = ref('')
+const filterEngagement = ref('')
+// Default ON — confirmed live (2026-09-01) that hiding only Email-only
+// customers still left 239 visible (126 CompassAir-only, 30 with no
+// product tag at all, only 81 genuinely VMS) — real clutter for
+// VMS-specific contact/migration work either way. Shows only customers
+// whose `product` includes "VMS" in any combo (e.g. "Email, VMS").
+const vmsOnly = ref(true)
 
-const panelOpen = ref(false)
-const selected = ref<Customer | null>(null)
-const activeTab = ref('overview')
+const showAddForm = ref(false)
+const creatingCustomer = ref(false)
+const newCustomer = ref({ name: '', tier: 'Strategic', csm: '', arr_gbp: 0, infra: 'Old', prod_version: '' })
 
-const tabs = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'cases', label: 'Cases' },
-  { id: 'upgrades', label: 'Upgrades' },
-  { id: 'migration', label: 'Migration' },
-]
+// Soft warning, not a hard block — real companies can legitimately share a
+// near-identical rendered name (Ltd vs Limited, a subsidiary), so this asks
+// rather than prevents. Catches the accidental-duplicate class of mistake
+// (the real Harren/Oslo duplicate-customer incident this session) without
+// blocking a genuine edge case.
+const confirmedDuplicate = ref(false)
+const duplicateMatch = computed(() => {
+  const name = newCustomer.value.name.trim().toLowerCase()
+  if (!name) return null
+  return customers.value.find(c => c.name.trim().toLowerCase() === name) ?? null
+})
+
+// Real Dataloy plan allowances (dataloy-systems.com/plans) — Scale=Starter,
+// Strategic=Professional, Premier=Enterprise. The backend enforces this on
+// create/update regardless of what's sent; this is just for the live label.
+function tierUpgradeLimit(tier: string): number {
+  return tier === 'Premier' ? 12 : tier === 'Strategic' ? 8 : 4
+}
 
 onMounted(async () => {
+  // Not part of the Promise.all below, deliberately — real_open_counts_by_
+  // customer() is a live-Jira aggregate (cheap once team_open_stats()'s
+  // cache is warm, but a real cold fetch otherwise) and shouldn't hold up
+  // the rest of this page (names/tiers/ARR) rendering while it resolves.
+  api.customers.openCaseCounts()
+    .then(res => { openCaseCounts.value = res.data.counts })
+    .catch(() => { openCaseCounts.value = {} })
+
   try {
-    const [custRes, casesRes, statsRes, upgRes] = await Promise.all([
+    const [custRes, statsRes, upgRes, migRes] = await Promise.all([
       api.customers.list(),
-      api.cases.list(),
       api.customers.stats(),
       api.upgrades.list(),
+      api.migrations.list(),
     ])
     customers.value = custRes.data
-    allCases.value = casesRes.data
     stats.value = statsRes.data
     allUpgrades.value = upgRes.data
+    allMigrations.value = migRes.data
   } finally {
     loading.value = false
   }
@@ -228,40 +272,145 @@ const filtered = computed(() =>
     if (filterHealth.value === 'red' && c.health_score > 45) return false
     if (filterHealth.value === 'amber' && (c.health_score <= 45 || c.health_score > 70)) return false
     if (filterHealth.value === 'green' && c.health_score <= 70) return false
+    if (filterEngagement.value && engagementTier(c.last_case_activity_at) !== filterEngagement.value) return false
+    // Show only real VMS customers — anyone whose product tag doesn't
+    // contain "VMS" (Email-only, CompassAir-only, or untagged) is hidden;
+    // a mixed tag like "Email, VMS" still counts as a real VMS customer.
+    if (vmsOnly.value && !(c.product ?? '').toLowerCase().includes('vms')) return false
     return true
   })
 )
 
-const customerCases = computed(() =>
-  selected.value ? allCases.value.filter(c => c.customer_id === selected.value!.id) : []
-)
+const migMap = computed(() => {
+  const m: Record<number, MigrationProject> = {}
+  for (const mg of allMigrations.value) m[mg.customer_id] = mg
+  return m
+})
+
+// Column sorting — click a header to sort by it, click again to flip
+// direction. Each column gets a real comparator matched to its actual data
+// (tier/package by rank not alphabet, version by numeric parts not a naive
+// parseFloat — the same "8.30 < 8.9" bug already flagged elsewhere in this
+// app — dates/numbers with nulls always sorting to the end).
+type SortKey = 'health' | 'name' | 'tier' | 'csm' | 'package' | 'prod_version' | 'infra' | 'days_since_upgrade' | 'upgrades' | 'renewal' | 'open_cases' | 'migration'
+const columns: { key: SortKey; label: string }[] = [
+  { key: 'health', label: 'Health' },
+  { key: 'name', label: 'Customer' },
+  { key: 'tier', label: 'Tier' },
+  { key: 'csm', label: 'CSM' },
+  { key: 'package', label: 'Package' },
+  { key: 'prod_version', label: 'Prod Version' },
+  { key: 'infra', label: 'Infra' },
+  { key: 'days_since_upgrade', label: 'Days Since Upgrade' },
+  { key: 'upgrades', label: 'Upgrades' },
+  { key: 'renewal', label: 'Renewal' },
+  { key: 'open_cases', label: 'Open Cases' },
+  { key: 'migration', label: 'Migration' },
+]
+const sortKey = ref<SortKey>('name')
+const sortDir = ref<1 | -1>(1)
+function toggleSort(key: SortKey) {
+  if (sortKey.value === key) sortDir.value = sortDir.value === 1 ? -1 : 1
+  else { sortKey.value = key; sortDir.value = 1 }
+}
+
+const tierRankMap: Record<string, number> = { Premier: 0, Strategic: 1, Scale: 2 }
+function tierRank(tier?: string | null) {
+  return tier != null && tier in tierRankMap ? tierRankMap[tier] : 99
+}
+const infraRankMap: Record<string, number> = { Old: 0, Mixed: 1, New: 2 }
+function infraRank(infra?: string | null) {
+  return infra != null && infra in infraRankMap ? infraRankMap[infra] : 99
+}
+function versionTuple(v?: string | null): number[] {
+  const nums = v?.match(/\d+/g)
+  return nums ? nums.map(Number) : []
+}
+function compareVersions(a?: string | null, b?: string | null): number {
+  const ta = versionTuple(a), tb = versionTuple(b)
+  if (!ta.length || !tb.length) return (ta.length ? 0 : 1) - (tb.length ? 0 : 1)
+  for (let i = 0; i < Math.max(ta.length, tb.length); i++) {
+    const d = (ta[i] ?? 0) - (tb[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+function compareNullableNumber(a: number | null | undefined, b: number | null | undefined): number {
+  if (a == null || b == null) return (a == null ? 1 : 0) - (b == null ? 1 : 0)
+  return a - b
+}
+function compareNullableDate(a?: string | null, b?: string | null): number {
+  if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1)
+  return new Date(a).getTime() - new Date(b).getTime()
+}
+
+function compareCustomers(key: SortKey, a: Customer, b: Customer): number {
+  switch (key) {
+    case 'health': return a.health_score - b.health_score
+    case 'name': return a.name.localeCompare(b.name)
+    case 'tier': return tierRank(a.tier) - tierRank(b.tier)
+    case 'csm': return (a.csm || '').localeCompare(b.csm || '')
+    case 'package': return tierRank(a.tier) - tierRank(b.tier)
+    case 'prod_version': return compareVersions(a.prod_version, b.prod_version)
+    case 'infra': return infraRank(a.infra) - infraRank(b.infra)
+    case 'days_since_upgrade': return compareNullableNumber(daysSinceUpgrade(a.id), daysSinceUpgrade(b.id))
+    case 'upgrades': {
+      const pa = a.upgrades_limit ? a.upgrades_used / a.upgrades_limit : 0
+      const pb = b.upgrades_limit ? b.upgrades_used / b.upgrades_limit : 0
+      return pa - pb
+    }
+    case 'renewal': return compareNullableDate(a.renewal_date, b.renewal_date)
+    case 'open_cases': return compareNullableNumber(openCaseCounts.value[a.id], openCaseCounts.value[b.id])
+    case 'migration': return migStatus(a.id).localeCompare(migStatus(b.id))
+    default: return 0
+  }
+}
+
+const sorted = computed(() => [...filtered.value].sort((a, b) => sortDir.value * compareCustomers(sortKey.value, a, b)))
 
 function openCasesFor(id: number) {
-  const n = allCases.value.filter(c => c.customer_id === id).length
-  return n || '0'
+  return openCaseCounts.value[id] ?? '—'
 }
 
 function migStatus(id: number): string {
-  return '—'
-}
-function migClass(id: number): string {
-  return ''
+  return migMap.value[id]?.stage ?? '—'
 }
 
-function openPanel(c: Customer) {
-  selected.value = c
-  activeTab.value = 'overview'
-  panelOpen.value = true
-}
-function closePanel() {
-  panelOpen.value = false
+function migStyle(id: number): string {
+  const stage = migMap.value[id]?.stage
+  if (!stage) return 'color:var(--text3);font-size:10px'
+  if (stage === 'Complete') return 'color:var(--green);font-weight:700;font-size:10px'
+  if (stage === 'In Progress') return 'color:var(--teal);font-weight:700;font-size:10px'
+  return 'color:var(--text3);font-size:10px'
 }
 
-function formatArr(v?: number | null) {
-  if (v == null) return '—'
-  if (v >= 1_000_000) return `£${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `£${(v / 1_000).toFixed(0)}K`
-  return `£${v.toLocaleString()}`
+function toggleAddForm() {
+  showAddForm.value = !showAddForm.value
+  if (showAddForm.value) {
+    newCustomer.value = { name: '', tier: 'Strategic', csm: '', arr_gbp: 0, infra: 'Old', prod_version: '' }
+    confirmedDuplicate.value = false
+  }
+}
+
+async function addCustomer() {
+  if (!newCustomer.value.name || !newCustomer.value.csm) return
+  creatingCustomer.value = true
+  try {
+    const res = await api.customers.create({
+      name: newCustomer.value.name,
+      tier: newCustomer.value.tier,
+      csm: newCustomer.value.csm,
+      arr_gbp: newCustomer.value.arr_gbp || 0,
+      infra: newCustomer.value.infra,
+      prod_version: newCustomer.value.prod_version || null,
+    })
+    customers.value.unshift(res.data)
+    const statsRes = await api.customers.stats()
+    stats.value = statsRes.data
+    showAddForm.value = false
+  } catch { /* ignore */ } finally {
+    creatingCustomer.value = false
+  }
 }
 
 function formatRenewal(d?: string | null) {
@@ -284,21 +433,13 @@ function healthDot(score: number) {
 function healthColor(score: number) {
   return score > 70 ? 'color:var(--green)' : score > 45 ? 'color:var(--amber)' : 'color:var(--red)'
 }
-function churnColor(risk: string) {
-  return risk === 'High' || risk === 'Critical' ? 'color:var(--red)' : 'color:var(--text3)'
-}
-function sentimentColor(s: string) {
-  return s === 'Frustrated' || s === 'Escalating' ? 'color:var(--red)' : s === 'Happy' ? 'color:var(--green)' : 'color:var(--text3)'
-}
 function tierClass(tier?: string | null) {
   return tier === 'Premier' ? 'tp' : tier === 'Strategic' ? 'ts' : 'tsc'
 }
 function infraClass(infra: string) {
   return infra === 'New' ? 'in' : infra === 'Old' ? 'io' : 'im'
 }
-function envClass(env: string) {
-  return env === 'PROD' ? 'ep' : env === 'TEST' ? 'et' : 'ed'
-}
+
 function versionColor(v?: string | null) {
   if (!v) return ''
   const num = parseFloat(v.replace('-R', ''))
@@ -343,3 +484,7 @@ function daysSinceColor(days: number | null) {
   return 'color:var(--green)'
 }
 </script>
+
+<style scoped>
+.cust-row { cursor: pointer; }
+</style>

@@ -7,9 +7,6 @@ services:
     env_file: .env
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backups:/backups
-      # pg_dump backup: runs daily at 02:00 UTC inside the container
-      - ./scripts/backup.sh:/docker-entrypoint-initdb.d/backup.sh:ro
     ports:
       - "5434:5432"
     healthcheck:
@@ -28,6 +25,9 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --reload
     volumes:
       - ./backend:/app
+      # db_backup (app/scheduler.py) runs pg_dump from here — replaces the old
+      # docker-entrypoint-initdb.d approach, confirmed to only ever run once
+      - ./backups:/backups
     ports:
       - "8002:8000"
     depends_on:

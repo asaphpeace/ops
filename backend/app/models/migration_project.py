@@ -22,7 +22,16 @@ class MigrationProject(Base):
     stalled_days: Mapped[int] = mapped_column(Integer, default=0)
 
     downtime_agreed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    downtime_duration_mins: Mapped[int] = mapped_column(Integer, default=240)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # NULL = a not-yet-actioned candidate (e.g. from a bulk import like
+    # Elias's Old-AWS environment list) — surfaced only in the Migration
+    # Priority backlog, never in the kanban. Set once a human clicks
+    # "Initiate", which is what actually puts it in the "Not Started" kanban
+    # column; ad-hoc migrations created via "+ Start Migration" are
+    # initiated immediately, since a human explicitly chose to start them.
+    initiated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     ip_notes: Mapped[str | None] = mapped_column(Text)
     integration_notes: Mapped[str | None] = mapped_column(Text)

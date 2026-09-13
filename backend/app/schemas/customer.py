@@ -1,5 +1,13 @@
 from datetime import date, datetime
+from typing import Literal
 from pydantic import BaseModel
+
+# Matches routers/customers.py::TIER_UPGRADE_LIMITS — the only tiers that
+# actually have a defined upgrade allowance. An unvalidated free-text tier
+# silently broke the "upgrades_limit derives from tier" invariant (a typo'd
+# or invalid tier just fell through with whatever upgrades_limit was passed,
+# confirmed live via a black-box test creating tier="Gold").
+TierLiteral = Literal["Premier", "Strategic", "Scale"]
 
 
 class CaseOut(BaseModel):
@@ -90,12 +98,24 @@ class NoteOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ContactOut(BaseModel):
+    id: int
+    email: str
+    source: str
+    is_primary: bool
+    primary_contact_reason: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class CustomerOut(BaseModel):
     id: int
     name: str
     tier: str
     csm: str
     arr_gbp: int
+    status: str = "Active"
     product: str | None
     plan: str | None
     region: str | None
@@ -107,8 +127,14 @@ class CustomerOut(BaseModel):
     health_score: int
     sentiment: str
     churn_risk: str
+    hypercare_until: date | None = None
+    hypercare_reason: str | None = None
+    last_case_activity_at: date | None = None
     upgrades_used: int
     upgrades_limit: int
+    after_hours_eligible: bool = False
+    after_hours_limit: int = 0
+    after_hours_used: int = 0
     prod_version: str | None
     test_version: str | None
     infra: str
@@ -120,6 +146,10 @@ class CustomerOut(BaseModel):
     pref_days: str | None
     notice_required: str | None
     blackout_periods: str | None
+    tenant_login_notes: str | None = None
+    ai_summary: str | None = None
+    ai_summary_at: datetime | None = None
+    jvm_client: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -135,7 +165,7 @@ class CustomerDetail(CustomerOut):
 
 class CustomerCreate(BaseModel):
     name: str
-    tier: str
+    tier: TierLiteral
     csm: str
     arr_gbp: int = 0
     product: str | None = None
@@ -151,6 +181,8 @@ class CustomerCreate(BaseModel):
     churn_risk: str = "Medium"
     upgrades_used: int = 0
     upgrades_limit: int = 10
+    after_hours_eligible: bool = False
+    after_hours_limit: int = 0
     prod_version: str | None = None
     test_version: str | None = None
     infra: str = "Old"
@@ -164,5 +196,18 @@ class CustomerCreate(BaseModel):
     blackout_periods: str | None = None
 
 
-class CustomerUpdate(CustomerCreate):
-    pass
+class CustomerUpdate(BaseModel):
+    health_score: int | None = None
+    sentiment: str | None = None
+    churn_risk: str | None = None
+    hypercare_until: date | None = None
+    hypercare_reason: str | None = None
+    name: str | None = None
+    tier: TierLiteral | None = None
+    csm: str | None = None
+    arr_gbp: int | None = None
+    renewal_date: date | None = None
+    tenant_login_notes: str | None = None
+    after_hours_eligible: bool | None = None
+    after_hours_limit: int | None = None
+    jvm_client: bool | None = None

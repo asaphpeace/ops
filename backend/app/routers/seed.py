@@ -1,9 +1,12 @@
-"""Seed endpoint — POST /seed to populate DB with prototype data. Dev only."""
+"""Seed endpoint — POST /seed to populate DB with prototype data.
+Only active when SEED_ENABLED=true in the environment.
+"""
 from datetime import date, datetime, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.customer import Customer
 from app.models.case import Case
@@ -25,6 +28,8 @@ async def _already_seeded(db: AsyncSession) -> bool:
 
 @router.post("")
 async def seed_database(db: AsyncSession = Depends(get_db)):
+    if not settings.seed_enabled:
+        raise HTTPException(status_code=403, detail="Seed endpoint is disabled. Set SEED_ENABLED=true to enable.")
     if await _already_seeded(db):
         return {"status": "already seeded"}
 

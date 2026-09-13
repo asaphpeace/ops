@@ -2,15 +2,27 @@
   <nav class="sidebar">
     <div class="logo">SO</div>
 
-    <RouterLink to="/triage" custom v-slot="{ isActive, navigate }">
+    <RouterLink to="/" custom v-slot="{ isActive, navigate }">
       <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ⚡<span class="tip">Triage Queue</span>
+        📊<span class="tip">Command Center</span>
       </button>
     </RouterLink>
 
-    <RouterLink to="/command" custom v-slot="{ isActive, navigate }">
+    <RouterLink to="/my-desk" custom v-slot="{ isActive, navigate }">
       <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ⊞<span class="tip">Command Centre</span>
+        🖥<span class="tip">My Desk</span>
+      </button>
+    </RouterLink>
+
+    <RouterLink to="/operations" custom v-slot="{ isActive, navigate }">
+      <button class="nb" :class="{ active: isActive }" @click="navigate">
+        ⊞<span class="tip">Operations</span>
+      </button>
+    </RouterLink>
+
+    <RouterLink to="/support-signals" custom v-slot="{ isActive, navigate }">
+      <button class="nb" :class="{ active: isActive }" @click="navigate">
+        ∿<span class="tip">Support Signals</span>
       </button>
     </RouterLink>
 
@@ -22,29 +34,21 @@
       </button>
     </RouterLink>
 
-    <RouterLink to="/migration" custom v-slot="{ isActive, navigate }">
-      <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ⇉<span class="tip">Migration</span>
-      </button>
-    </RouterLink>
-
-    <div class="nb-divider"></div>
-
     <RouterLink to="/releases" custom v-slot="{ isActive, navigate }">
       <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ◈<span class="tip">Releases</span>
+        ▤<span class="tip">Releases</span>
       </button>
     </RouterLink>
 
-    <RouterLink to="/education" custom v-slot="{ isActive, navigate }">
+    <RouterLink to="/engineering" custom v-slot="{ isActive, navigate }">
       <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ✦<span class="tip">Education</span>
+        ⚙<span class="tip">Engineering</span>
       </button>
     </RouterLink>
 
-    <RouterLink to="/trends" custom v-slot="{ isActive, navigate }">
+    <RouterLink to="/tools" custom v-slot="{ isActive, navigate }">
       <button class="nb" :class="{ active: isActive }" @click="navigate">
-        ∿<span class="tip">Trends</span>
+        🛠<span class="tip">Tools</span>
       </button>
     </RouterLink>
   </nav>
@@ -65,6 +69,11 @@
         <div class="spill" v-if="triage">
           <div class="dot" style="background:var(--green)"></div>{{ triage.resolved_today }} done today
         </div>
+        <NotificationBell />
+        <AiObservationBell />
+        <RouterLink to="/weekly-report">
+          <button class="btn btn-g btn-sm">🗞 Weekly Report</button>
+        </RouterLink>
         <RouterLink to="/snapshot">
           <button class="btn btn-g btn-sm">📋 Snapshot</button>
         </RouterLink>
@@ -73,12 +82,25 @@
 
     <RouterView />
   </div>
+
+  <CaseDrillPanel />
+  <CustomerDrillPanel />
+  <BugDrillPanel />
+  <EngineeringEntityPanel />
+  <ToastHost />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, type TriageStats } from '@/api/client'
+import CaseDrillPanel from '@/components/CaseDrillPanel.vue'
+import CustomerDrillPanel from '@/components/CustomerDrillPanel.vue'
+import BugDrillPanel from '@/components/BugDrillPanel.vue'
+import EngineeringEntityPanel from '@/components/EngineeringEntityPanel.vue'
+import ToastHost from '@/components/ToastHost.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
+import AiObservationBell from '@/components/AiObservationBell.vue'
 
 const route = useRoute()
 const triage = ref<TriageStats | null>(null)
@@ -91,17 +113,60 @@ onMounted(async () => {
 })
 
 const titles: Record<string, string> = {
-  '/triage':    'Triage Queue',
-  '/command':   'Command Centre',
-  '/customers': 'Customer Intelligence',
-  '/migration': 'Migration Tracker',
-  '/releases':  'Release Intelligence',
-  '/education': 'Customer Education',
-  '/trends':    'Trends & Health',
-  '/snapshot':  'Handover Snapshot',
+  '/':                 'Command Center',
+  '/my-desk':          'My Desk',
+  '/operations':       'Operations',
+  '/support-signals':  'Support Signals',
+  '/customers':        'Customer Intelligence',
+  '/customers/comms':  'Customer Comms',
+  '/releases':         'Release Intelligence',
+  '/engineering':      'Engineering',
+  '/tools':            'Tools',
+  '/snapshot':         'Handover Snapshot',
+  '/weekly-report':    'Weekly Ops Report',
 }
 
-const currentTitle = computed(() => titles[route.path] ?? 'Sedna Ops')
+// /customers and /tools each host several real sub-sections as tabs (see
+// CustomersHubView.vue / ToolsHubView.vue) — a per-tab title reads better
+// in the topbar than the bare hub name for all of them, including the
+// default tab (no ?tab= param at all — matches each hub's own
+// query-less-default convention, so the fallback below has to supply the
+// default tab id itself rather than only reading it from the URL).
+const defaultTabs: Record<string, string> = { '/customers': 'customers', '/tools': 'jira', '/engineering': 'overview' }
+const tabTitles: Record<string, Record<string, string>> = {
+  '/customers': {
+    customers: 'Customer Intelligence',
+    'csm-risk': 'CSM Renewal Risk',
+    trends: 'Trends & Health',
+    education: 'Customer Education',
+  },
+  '/tools': {
+    jira: 'Jira Mapping',
+    'vms-sandbox': 'VMS Sandbox',
+    incidents: 'Platform Incidents',
+    'ops-notes': 'Ops Notes',
+    ollama: 'Ollama',
+    troubleshoot: 'Troubleshoot',
+    knowledge: 'Knowledge',
+  },
+  '/engineering': {
+    overview: 'Engineering Overview',
+    matrix: 'Environment Matrix',
+    versions: 'Version Intelligence',
+    defects: 'Defect Intelligence',
+    deployments: 'Deployments',
+    'technical-risk': 'Technical Risk',
+    infrastructure: 'Infrastructure',
+    certificates: 'SSL Certificates',
+    logs: 'Logs',
+  },
+}
+
+const currentTitle = computed(() => {
+  const tab = (route.query.tab as string | undefined) ?? defaultTabs[route.path]
+  if (tab && tabTitles[route.path]?.[tab]) return tabTitles[route.path][tab]
+  return titles[route.path] ?? 'Sedna Ops'
+})
 
 const today = computed(() => {
   return new Date().toLocaleDateString('en-GB', {

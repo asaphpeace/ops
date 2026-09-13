@@ -27,6 +27,22 @@
   --teal:       #0bc5ea;
   --teal-dim:   rgba(11, 197, 234, 0.1);
   --gold:       #f0a030;
+
+  /* Chart categorical series — validated against this app's real dark
+     surface (#0f1623) with the dataviz skill's validator: all 8 pass
+     adjacent-pair CVD/normal-vision/contrast checks (worst adjacent ΔE 8.4
+     CVD / 19.3 normal-vision), status colors (--green/--amber/--red above)
+     deliberately excluded from this set so a series never impersonates a
+     status. Assign in fixed order per identity (engineer, lane) — never
+     re-cycle when a filtered set changes size. */
+  --series-1: #3987e5; /* blue */
+  --series-2: #d95926; /* orange */
+  --series-3: #199e70; /* aqua */
+  --series-4: #c98500; /* yellow */
+  --series-5: #d55181; /* magenta */
+  --series-6: #008300; /* green (series, distinct from status --green) */
+  --series-7: #9085e9; /* violet */
+  --series-8: #82962c; /* olive/chartreuse — the "Defects" lane */
 }
 
 /* ── RESET ─────────────────────────────────────────────── */
@@ -36,7 +52,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   min-height: 100vh;
   display: flex;
@@ -154,13 +170,18 @@ body {
 
 /* ── TYPOGRAPHY ─────────────────────────────────────────── */
 .sh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.sh h2 { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
+.sh h2 { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
 .sh p  { font-size: 10px; color: var(--text3); margin-top: 2px; }
 
 /* ── STAT CARDS ─────────────────────────────────────────── */
 .stats-row { display: grid; gap: 10px; margin-bottom: 20px; }
+.sr-9 { grid-template-columns: repeat(9, 1fr); }
+.sr-8 { grid-template-columns: repeat(8, 1fr); }
+.sr-7 { grid-template-columns: repeat(7, 1fr); }
+.sr-6 { grid-template-columns: repeat(6, 1fr); }
 .sr-5 { grid-template-columns: repeat(5, 1fr); }
 .sr-4 { grid-template-columns: repeat(4, 1fr); }
+.sr-3 { grid-template-columns: repeat(3, 1fr); }
 .sc {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -174,6 +195,17 @@ body {
 .sc.alert { border-color: rgba(232, 68,  90, .25); } .sc.alert .val { color: var(--red); }
 .sc.good  { border-color: rgba(15,  186, 129, .25); } .sc.good  .val { color: var(--green); }
 .sc.info  { border-color: rgba(59,  127, 245, .25); } .sc.info  .val { color: var(--accent); }
+
+/* Daily Ops per-engineer trend rows — shared by MyDeskView.vue (Asaph's own
+   row only) and CommandCenterView.vue (the full team, one row per engineer). */
+.do-row { display: grid; grid-template-columns: 80px repeat(4, 1fr); gap: 12px; align-items: center; padding: 6px 0; }
+.do-head { color: var(--text3); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; padding-bottom: 4px; }
+.do-name { font-size: 11px; color: var(--text2); font-weight: 600; }
+.do-metric { display: flex; align-items: center; gap: 6px; }
+.do-spark { width: 64px; height: 20px; flex-shrink: 0; display: block; }
+.do-val { font-size: 11px; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; width: 22px; text-align: right; }
+.do-row-me { background: var(--accent-dim); border-radius: 6px; }
+.do-row-me .do-name { color: var(--text); font-weight: 800; }
 
 /* ── BADGES ─────────────────────────────────────────────── */
 .env-badge { font-size: 8px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: .06em; }
@@ -195,6 +227,22 @@ body {
 .io { background: var(--red-dim);   color: var(--red); }
 .in { background: var(--green-dim); color: var(--green); }
 .im { background: var(--amber-dim); color: var(--amber); }
+
+.hypercare-badge { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 3px; background: var(--amber-dim); color: var(--amber); white-space: nowrap; }
+
+/* Still on the old Java desktop client, not the web app — confirmed from
+   the validated VMS customer list (see Customer.jvm_client). */
+.jvm-badge { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 3px; background: var(--purple-dim); color: var(--purple); margin-left: 6px; white-space: nowrap; }
+.hypercare-badge.overdue { background: var(--red-dim); color: var(--red); }
+
+/* No real support case in 6mo (quiet) / 12mo (dormant) — derived client-side
+   from Customer.last_case_activity_at, see api/client.ts::engagementTier(). */
+.dormant-badge { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; white-space: nowrap; }
+.dormant-badge.quiet { background: var(--amber-dim); color: var(--amber); }
+.dormant-badge.dormant { background: var(--red-dim); color: var(--red); }
+
+.jira-link { font-size: 10px; font-weight: 700; color: var(--accent); text-decoration: none; background: var(--accent-dim); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.jira-link:hover { text-decoration: underline; }
 
 .health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .hg { background: var(--green); }
@@ -230,37 +278,69 @@ body {
 .amber-bar  { background: var(--amber-dim);  border: 1px solid rgba(240, 160, 48, .25);  border-radius: 8px; padding: 9px 13px; margin-bottom: 14px; font-size: 11px; color: var(--amber); }
 
 /* ── PIPELINE BOARD ─────────────────────────────────────── */
-.pb   { display: grid; gap: 10px; margin-bottom: 20px; }
-.pb-5 { grid-template-columns: repeat(5, 1fr); }
-.pb-8 { grid-template-columns: repeat(8, 1fr); overflow-x: auto; }
-.pc   { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; min-width: 155px; }
-.pc-h { padding: 9px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.pc-h .cn { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--text2); }
-.cb   { font-size: 9px; font-weight: 700; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 1px 6px; color: var(--text3); }
-.pcards { padding: 8px; display: flex; flex-direction: column; gap: 7px; min-height: 70px; }
+/* .pb/.pc/.pc-h/.cb/.pcards/.pb-N moved into frontend/src/components/KanbanBoard.vue's
+   scoped style — that component now owns the board scaffolding for all 4 Operations tabs. */
 
 /* ── UPGRADE CARDS ──────────────────────────────────────── */
 .uc { background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; padding: 9px 11px; cursor: pointer; transition: border-color .15s, transform .1s; }
 .uc:hover          { border-color: var(--accent); transform: translateY(-1px); }
 .uc.blocked        { border-color: rgba(232, 68, 90, .4); background: rgba(232, 68, 90, .03); }
 .uc .ct  { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
-.uc .cc  { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uc .cc  { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .uc .cv  { font-size: 10px; color: var(--text3); font-family: 'SF Mono', monospace; margin-bottom: 5px; }
 .uc .cv span { color: var(--accent); }
 .uc .cf  { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.jp { font-size: 9px; color: var(--text3); background: var(--surface3); border: 1px solid var(--border2); border-radius: 3px; padding: 1px 5px; font-family: monospace; cursor: pointer; }
+.jp { font-size: 9px; color: var(--text3); background: var(--surface3); border: 1px solid var(--border2); border-radius: 3px; padding: 1px 5px; font-family: monospace; cursor: pointer; text-decoration: none; display: inline-block; }
 .jp:hover { color: var(--accent); border-color: var(--accent); }
 .bw { font-size: 9px; color: var(--red); background: var(--red-dim); border-radius: 3px; padding: 2px 6px; margin-top: 4px; display: flex; align-items: center; gap: 3px; }
 
 /* ── TABLE ──────────────────────────────────────────────── */
 .tw { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+/* Canonical card padding + eyebrow/period label — was duplicated verbatim
+   across CommandCenterView.vue, MyDeskView.vue, and dashboard components;
+   one definition here instead. */
+.md-card { padding: 15px 17px; }
+.md-eyebrow { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 10px; }
+.md-period { color: var(--text2); font-weight: 700; text-transform: none; letter-spacing: 0; }
+/* Shared drill-down panel chrome — the header/close-button wrapper around
+   a DrillList.vue, reused by Team Load Split, Command Center's Your Work
+   tiles, and My Desk's Flags/Response & Resolution tiles. */
+.md-drill-panel { margin-top: 4px; }
+.md-drill-head { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--text2); font-weight: 700; margin-bottom: 2px; }
+.md-drill-close { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 12px; padding: 2px 6px; }
+.md-drill-close:hover { color: var(--text); }
+/* A stat tile ("sc") or table cell that opens a drill-down on click. */
+.work-drill, .dl-cell { cursor: pointer; }
+.work-drill:hover, .dl-cell:hover { color: var(--accent); }
+/* A customer name inline in a flag tile's ".sub" line, clicking through to
+   the Customer panel — plain text weight/size (inherits from ".sub"),
+   just a cursor + hover cue since it sits inline with commas between names. */
+.flag-chip { cursor: pointer; }
+.flag-chip:hover { color: var(--accent); text-decoration: underline; }
+/* Wrapped chip list inside a drill-down panel (not inline in a ".sc" tile,
+   which used to make long name lists stretch the whole stats-row's height —
+   every tile in a CSS grid row). Each chip reuses ".flag-chip"'s cursor/hover. */
+.flag-chip-wrap { display: flex; flex-wrap: wrap; gap: 5px 10px; }
+.flag-chip-wrap .flag-chip { font-size: 11px; color: var(--text2); }
+/* One shared vertical rhythm for stacked page sections, instead of each
+   section hand-writing its own margin-top value. */
+.cc-stack { display: flex; flex-direction: column; gap: 16px; }
+/* "You" highlight tag — was duplicated near-identically as .tt-me-tag
+   (TeamLoadDonut) and .cm-mine-tag (CaseMixBars); one definition, reused
+   wherever a row needs to call out the viewer's own name. */
+.you-tag { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); background: var(--surface2); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
 .ttb { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 table { width: 100%; border-collapse: collapse; }
 thead th { padding: 8px 12px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); font-weight: 800; border-bottom: 1px solid var(--border); white-space: nowrap; }
+/* Click-to-sort table header — reusable across any table that wires up a
+   sortKey/sortDir pair (see CustomersView.vue for the first user). */
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--text2); }
+.sort-arrow { margin-left: 4px; color: var(--accent); font-size: 8px; }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; cursor: pointer; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--surface2); }
-tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-align: middle; }
+tbody td { padding: 9px 12px; font-size: 12px; color: var(--text2); vertical-align: middle; }
 .td-name { font-weight: 700; color: var(--text); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vm { font-family: 'SF Mono', monospace; font-size: 10px; }
 
@@ -282,7 +362,7 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .dc:last-child { border-right: none; }
 .cs    { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 6px 8px; }
 .cs.unc { border-color: rgba(240, 160, 48, .4); background: rgba(240, 160, 48, .03); }
-.cs .sn { font-weight: 700; color: var(--text); font-size: 11px; }
+.cs .sn { font-weight: 700; color: var(--text); font-size: 12px; }
 .cs .sd { color: var(--text3); font-size: 9px; font-family: monospace; }
 .ce    { border: 1px dashed var(--border); border-radius: 6px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text3); cursor: pointer; }
 .ce:hover { border-color: var(--accent); color: var(--accent); }
@@ -292,8 +372,10 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .overlay.open { display: block; }
 .dp { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 580px; background: var(--surface); border-left: 1px solid var(--border); z-index: 200; overflow-y: auto; box-shadow: -24px 0 60px rgba(0, 0, 0, .6); }
 .dp.open { display: block; }
+.overlay.overlay-nested { z-index: 170; }
+.dp.dp-nested { z-index: 220; }
 .dp-h  { padding: 18px 22px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 10; }
-.dp-h h3 { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -.02em; margin-bottom: 5px; }
+.dp-h h3 { font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -.02em; margin-bottom: 5px; }
 .dp-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 22px; background: var(--surface); overflow-x: auto; }
 .dt { padding: 9px 12px; font-size: 10px; font-weight: 700; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; white-space: nowrap; }
 .dt.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -301,17 +383,32 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .dp-body { padding: 18px 22px; }
 .ds   { margin-bottom: 18px; }
 .ds h4 { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); font-weight: 800; margin-bottom: 9px; }
+.cd-risk-bars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.cd-risk-bar { display: flex; flex-direction: column; gap: 3px; }
+.cd-risk-track { height: 4px; border-radius: 2px; background: var(--border2); }
+.cd-risk-fill { height: 4px; border-radius: 2px; background: var(--accent); }
+.cd-chip { font-size: 9.5px; padding: 3px 7px; border-radius: 4px; background: var(--surface2); color: var(--text2); }
 .ec   { background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; padding: 11px 13px; margin-bottom: 7px; }
 .ec-h { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
 .fg   { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
-.fr   { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 10px; color: var(--text2); }
+.fr   { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 11px; color: var(--text2); }
+/* Single-column field-row list — label/value pairs each get the full row
+   width plus a divider, so space-between spreads consistently regardless
+   of label/value length (unlike .fg's 2-column grid, where short pairs in
+   one column and long pairs in the other end up visually uneven). */
+.fg-1col { display: flex; flex-direction: column; gap: 2px; }
+.fg-1col .fr { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; font-size: 11px; color: var(--text2); border-bottom: 1px solid var(--border); }
+.fg-1col .fr:last-child { border-bottom: none; }
 .fon  { color: var(--green); font-size: 9px; font-weight: 800; }
 .fof  { color: var(--text3); font-size: 9px; }
 .cbx  { position: absolute; top: 18px; right: 18px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text3); font-size: 13px; }
 .cbx:hover { color: var(--text); }
-.jr   { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 11px; margin-bottom: 5px; display: flex; align-items: center; gap: 9px; }
-.jref { font-family: monospace; font-size: 10px; color: var(--accent); font-weight: 700; white-space: nowrap; cursor: pointer; }
-.jtitle { font-size: 11px; color: var(--text); flex: 1; }
+.jr   { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 11px; margin-bottom: 5px; display: flex; align-items: center; gap: 9px; transition: border-color .15s, background .15s; }
+.jr.jr-click { cursor: pointer; }
+.jr.jr-click:hover { border-color: var(--accent); background: var(--surface3); }
+.jref { font-family: monospace; font-size: 10px; color: var(--accent); font-weight: 700; white-space: nowrap; cursor: pointer; text-decoration: none; }
+.jref:hover { text-decoration: underline; }
+.jtitle { font-size: 12px; color: var(--text); flex: 1; }
 .jst  { font-size: 9px; color: var(--text3); white-space: nowrap; }
 
 /* ── QUEUE ITEMS ────────────────────────────────────────── */
@@ -320,8 +417,8 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .qi.sla-red  { border-color: rgba(232, 68, 90, .4); }
 .qi.sla-amber { border-color: rgba(240, 160, 48, .35); }
 .qi-left     { flex: 1; }
-.qi-customer { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
-.qi-summary  { font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+.qi-customer { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.qi-summary  { font-size: 12px; color: var(--text2); margin-bottom: 5px; }
 .qi-meta     { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .qi-right    { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; min-width: 90px; }
 .sla-timer   { font-size: 10px; font-weight: 700; font-family: monospace; }
@@ -330,7 +427,7 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 /* ── MIGRATION CARDS ────────────────────────────────────── */
 .mc { background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px; padding: 8px 10px; cursor: pointer; transition: border-color .15s; }
 .mc:hover { border-color: var(--teal); }
-.mc .mn { font-size: 10px; font-weight: 700; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc .mn { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc .mm { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 3px; }
 .mc .mv { font-size: 9px; font-family: monospace; color: var(--text3); }
 .mc .ma { font-size: 9px; color: var(--text3); margin-top: 2px; }
@@ -346,7 +443,8 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .v-old { background: linear-gradient(90deg, #e8445a, #f07080); }
 .v-mid { background: linear-gradient(90deg, #f0a030, #f5c060); }
 .v-new { background: linear-gradient(90deg, #0fba81, #30d4a0); }
-.tli   { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+.v-unknown { background: var(--text3); }
+.tli   { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .tli:last-child { border-bottom: none; }
 .tli-n { color: var(--text); font-weight: 600; }
 
@@ -354,20 +452,29 @@ tbody td { padding: 9px 12px; font-size: 11px; color: var(--text2); vertical-ali
 .tl-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .tl-item:last-child { border-bottom: none; }
 .tl-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
-.tl-content .tl-what { font-size: 11px; color: var(--text); font-weight: 600; margin-bottom: 2px; }
+.tl-content .tl-what { font-size: 12px; color: var(--text); font-weight: 600; margin-bottom: 2px; }
 .tl-content .tl-when { font-size: 9px; color: var(--text3); }
 
 /* ── RELEASE ────────────────────────────────────────────── */
 .ric { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
 .ri-ver  { font-size: 14px; font-weight: 800; color: var(--accent); font-family: monospace; margin-bottom: 4px; }
 .ri-meta { font-size: 10px; color: var(--text3); margin-bottom: 8px; }
-.ri-impact { font-size: 11px; color: var(--text2); }
+.ri-impact { font-size: 12px; color: var(--text2); }
 
 /* ── EDUCATION ──────────────────────────────────────────── */
 .gap-bar   { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
 .gap-label { font-size: 10px; color: var(--text2); width: 140px; flex-shrink: 0; }
 .gap-track { flex: 1; height: 14px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
 .gap-fill  { height: 100%; background: var(--purple); border-radius: 3px; display: flex; align-items: center; padding: 0 6px; font-size: 8px; font-weight: 700; color: #fff; }
+
+/* ── CUSTOMER DRILL PANEL — CASE TRENDS ────────────────────── */
+.cdp-trend-block { margin: 10px 0 14px; }
+.cdp-trend-label { font-size: 9.5px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.cdp-trend-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; }
+.cdp-trend-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.cdp-trend-bar { width: 100%; max-width: 18px; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 4px; }
+.cdp-trend-month { font-size: 7.5px; color: var(--text3); margin-top: 3px; }
+.cdp-topic-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text2); padding: 3px 0; }
 
 /* ── HEALTH CARD ────────────────────────────────────────── */
 .hc-mini  { display: flex; align-items: center; gap: 6px; }

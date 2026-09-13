@@ -4,7 +4,7 @@
       <div><h2>End of Day Snapshot</h2><p>Generated from live database state · {{ today }}</p></div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-g btn-sm" @click="copyText">Copy as text</button>
-        <button class="btn" disabled title="Phase 2">Share with Gisele</button>
+        <button class="btn" @click="shareGisele">Share with Gisele</button>
       </div>
     </div>
 
@@ -18,8 +18,8 @@
           🔴 SLA Breaching ({{ slaBreaching.length }})
         </div>
         <div v-if="!slaBreaching.length" style="color:var(--text3);font-size:11px;margin-bottom:12px">None — all cases within SLA.</div>
-        <div v-for="c in slaBreaching" :key="c.id" class="jr" style="margin-bottom:4px">
-          <span class="jref">↗ {{ c.jira_ref }}</span>
+        <div v-for="c in slaBreaching" :key="c.id" class="jr jr-click" style="margin-bottom:4px" @click="openCase(c.jira_ref)">
+          <a class="jref" :href="jiraUrl(c.jira_ref)" target="_blank" rel="noopener" title="Open in Jira" @click.stop>↗ {{ c.jira_ref }}</a>
           <div style="flex:1">
             <div class="jtitle">{{ c.title }}</div>
             <div style="font-size:9px;color:var(--text3)">{{ c.customer_name }} · {{ c.days_open }}d open</div>
@@ -33,7 +33,8 @@
         </div>
         <div v-if="!blockedUpgrades.length" style="color:var(--text3);font-size:11px;margin-bottom:12px">None blocked.</div>
         <div v-for="u in blockedUpgrades" :key="u.id" class="jr" style="margin-bottom:4px">
-          <span class="jref">{{ u.jira_ref ?? '—' }}</span>
+          <a v-if="u.jira_ref" class="jref" :href="jiraUrl(u.jira_ref)" target="_blank" rel="noopener" title="Open in Jira">{{ u.jira_ref }}</a>
+          <span v-else class="jref">—</span>
           <div style="flex:1">
             <div class="jtitle">{{ u.customer_name }} {{ u.environment }} → {{ u.to_version }}</div>
             <div style="font-size:9px;color:var(--amber)">{{ u.blocked_reason }}</div>
@@ -62,8 +63,8 @@
           📋 Awaiting Action ({{ awaitingAction.length }})
         </div>
         <div v-if="!awaitingAction.length" style="color:var(--text3);font-size:11px;margin-bottom:12px">Nothing pending.</div>
-        <div v-for="c in awaitingAction" :key="c.id" class="jr" style="margin-bottom:4px">
-          <span class="jref">↗ {{ c.jira_ref }}</span>
+        <div v-for="c in awaitingAction" :key="c.id" class="jr jr-click" style="margin-bottom:4px" @click="openCase(c.jira_ref)">
+          <a class="jref" :href="jiraUrl(c.jira_ref)" target="_blank" rel="noopener" title="Open in Jira" @click.stop>↗ {{ c.jira_ref }}</a>
           <div style="flex:1">
             <div class="jtitle">{{ c.title }}</div>
             <div style="font-size:9px;color:var(--text3)">{{ c.customer_name }}</div>
@@ -107,7 +108,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api, type Case, type Upgrade, type TrainingSession, type TriageStats, type MigrationProject } from '@/api/client'
+import { api, jiraUrl, type Case, type Upgrade, type TrainingSession, type TriageStats, type MigrationProject } from '@/api/client'
+import { useCaseDrill } from '@/composables/useCaseDrill'
+
+const { openCase } = useCaseDrill()
 
 const cases = ref<Case[]>([])
 const upgrades = ref<Upgrade[]>([])
@@ -176,8 +180,8 @@ function envClass(e: string) {
   return e === 'PROD' ? 'ep' : e === 'TEST' ? 'et' : 'ed'
 }
 
-async function copyText() {
-  const lines: string[] = [
+function snapshotLines(): string[] {
+  return [
     `SEDNA OPS SNAPSHOT — ${today.value}`,
     '',
     `SLA BREACHING (${slaBreaching.value.length}):`,
@@ -194,10 +198,20 @@ async function copyText() {
     '',
     `NUMBERS: ${triage.value?.total_active ?? '?'} active · ${triage.value?.sla_breaching ?? '?'} SLA breaching · ${triage.value?.awaiting_dev ?? '?'} awaiting dev · ${triage.value?.resolved_today ?? '?'} resolved today`,
   ]
+}
+
+async function copyText() {
   try {
-    await navigator.clipboard.writeText(lines.join('\n'))
+    await navigator.clipboard.writeText(snapshotLines().join('\n'))
     copied.value = true
     setTimeout(() => { copied.value = false }, 2500)
   } catch { /* clipboard blocked */ }
+}
+
+function shareGisele() {
+  const text = snapshotLines().join('\n')
+  const subject = encodeURIComponent(`Sedna Ops Snapshot — ${today.value}`)
+  const body = encodeURIComponent(text)
+  window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
 }
 </script>
