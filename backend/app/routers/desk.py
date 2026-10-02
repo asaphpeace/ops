@@ -560,11 +560,11 @@ async def desk_team(period: str = "week", month: str | None = None, db: AsyncSes
         # (Team Load Split shouldn't reward whoever's sat on the largest
         # backlog longest), just against the local, undercounted table
         # since this is the already-degraded fallback path.
-        open_cases_window = [c for c in open_cases if c.created_at and c.created_at >= period_start]
+        open_cases_window = [c for c in open_cases if c.created_at and c.created_at >= period_start.replace(tzinfo=timezone.utc)]
         window_age_mean, window_age_median = _age_days(open_cases_window)
 
         def _open_ticket(c: Case) -> dict:
-            age = (datetime.utcnow() - c.created_at).days if c.created_at else None
+            age = (datetime.now(timezone.utc) - c.created_at).days if c.created_at else None
             return {
                 "jira_ref": c.jira_ref, "title": c.title, "assignee_name": c.assigned_to,
                 "customer_name": c.jira_customer_name, "days_open": age,
@@ -692,7 +692,7 @@ async def desk_team(period: str = "week", month: str | None = None, db: AsyncSes
         created_cases = created_result.scalars().all()
 
         def _created_ticket(c: Case) -> dict:
-            age = (datetime.utcnow() - c.created_at).days if c.created_at else None
+            age = (datetime.now(timezone.utc) - c.created_at).days if c.created_at else None
             return {
                 "jira_ref": c.jira_ref, "title": c.title, "assignee_name": c.assigned_to,
                 "customer_name": c.jira_customer_name, "days_open": age,
