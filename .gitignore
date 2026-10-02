@@ -19,6 +19,7 @@ frontend/dist/
 
 # Docker volumes / local data
 backups/
+backend/scripts/seed_data*.json.gz
 postgres-data/
 
 # Alembic
