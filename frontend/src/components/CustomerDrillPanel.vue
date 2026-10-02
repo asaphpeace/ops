@@ -19,6 +19,17 @@
           >{{ engagementTier(customer.last_case_activity_at) === 'dormant' ? 'Dormant' : 'Quiet' }}</span>
           <span style="font-size:10px;color:var(--text3)">{{ customer.csm }}</span>
         </div>
+        <div v-if="stickyNotes.length" style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+          <div v-for="n in stickyNotes" :key="n.id" class="sticky-note-banner">
+            <span style="font-size:12px">📌</span>
+            <span style="font-size:11.5px;color:var(--text);white-space:pre-wrap;flex:1">{{ n.text }}</span>
+            <button
+              class="btn btn-sm btn-g" style="font-size:9px;padding:1px 6px;flex-shrink:0"
+              :disabled="togglingStickyId === n.id"
+              @click="toggleSticky(n)"
+            >Unpin</button>
+          </div>
+        </div>
         <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <div :class="['health-dot', healthDot(customer.health_score)]"></div>
           <span style="font-size:11px;font-weight:700" :style="healthColor(customer.health_score)">Health {{ customer.health_score }}/100</span>
@@ -459,13 +470,26 @@
         <!-- Notes tab -->
         <div v-if="activeTab === 'notes'">
           <textarea class="inp" style="min-height:80px;resize:vertical;width:100%" placeholder="Add a note…" v-model="noteText"></textarea>
-          <button class="btn" style="margin-top:8px" :disabled="!noteText.trim() || savingNote" @click="saveNote">
-            {{ savingNote ? 'Saving…' : 'Save Note' }}
-          </button>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" v-model="noteSticky">
+              📌 Pin as sticky — always visible on this customer, not just here
+            </label>
+            <button class="btn" :disabled="!noteText.trim() || savingNote" @click="saveNote">
+              {{ savingNote ? 'Saving…' : 'Save Note' }}
+            </button>
+          </div>
           <div class="divider"></div>
           <div v-if="!notes.length" style="color:var(--text3);font-size:11px;padding:8px 0">No notes yet.</div>
-          <div v-for="n in notes" :key="n.id" class="ds" style="margin-bottom:12px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:4px">{{ n.author }} · {{ formatDate(n.created_at) }}</div>
+          <div v-for="n in notes" :key="n.id" class="ds" :class="{ 'note-sticky': n.is_sticky }" style="margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:10px;color:var(--text3)">{{ n.author }} · {{ formatDate(n.created_at) }}</span>
+              <button
+                class="btn btn-sm btn-g" style="font-size:9px;padding:1px 7px"
+                :disabled="togglingStickyId === n.id"
+                @click="toggleSticky(n)"
+              >{{ n.is_sticky ? '📌 Unpin' : '📌 Pin' }}</button>
+            </div>
             <div style="font-size:12px;color:var(--text2);white-space:pre-wrap">{{ n.text }}</div>
           </div>
         </div>
@@ -588,6 +612,8 @@ const editingHealth = ref(false)
 const savingHealth = ref(false)
 const editHealth = ref({ score: 50, sentiment: 'Neutral', churnRisk: 'Medium', hypercareUntil: '', hypercareReason: '', afterHoursEligible: false, afterHoursLimit: 0 })
 const noteText = ref('')
+const noteSticky = ref(false)
+const togglingStickyId = ref<number | null>(null)
 const notes = ref<CustomerNoteEntry[]>([])
 const savingNote = ref(false)
 const campaigns = ref<CustomerCampaignSummary[]>([])
@@ -640,13 +666,28 @@ async function saveNote() {
   if (!customer.value || !noteText.value.trim()) return
   savingNote.value = true
   try {
-    const res = await api.customers.addNote(customer.value.id, noteText.value.trim())
+    const res = await api.customers.addNote(customer.value.id, noteText.value.trim(), noteSticky.value)
     notes.value = [res.data, ...notes.value]
     noteText.value = ''
+    noteSticky.value = false
   } finally {
     savingNote.value = false
   }
 }
+
+async function toggleSticky(note: CustomerNoteEntry) {
+  if (!customer.value || togglingStickyId.value != null) return
+  togglingStickyId.value = note.id
+  try {
+    const res = await api.customers.setNoteSticky(customer.value.id, note.id, !note.is_sticky)
+    const idx = notes.value.findIndex(n => n.id === note.id)
+    if (idx !== -1) notes.value[idx] = res.data
+  } finally {
+    togglingStickyId.value = null
+  }
+}
+
+const stickyNotes = computed(() => notes.value.filter(n => n.is_sticky))
 
 async function addContact() {
   if (!customer.value || !newContactEmail.value.trim()) return

@@ -5,12 +5,20 @@
       <div style="display:flex;gap:6px">
         <RouterLink to="/customers/comms" class="btn btn-g btn-sm" style="text-decoration:none">📢 Customer Comms</RouterLink>
         <button class="btn btn-g btn-sm" @click="showDiscovery = true">🔍 Discover Tenants</button>
+        <button class="btn btn-g btn-sm" @click="showExport = true">⭳ Export PDF</button>
         <button class="btn btn-g btn-sm">Import CSV</button>
         <button class="btn" @click="toggleAddForm">{{ showAddForm ? '✕ Cancel' : '+ Add Customer' }}</button>
       </div>
     </div>
 
     <TenantDiscoveryModal :open="showDiscovery" @close="showDiscovery = false" />
+    <CustomerExportModal
+      :open="showExport"
+      :customer-ids="exportCustomerIds"
+      v-model:sort-key="exportSortKey"
+      v-model:sort-dir="exportSortDir"
+      @close="showExport = false"
+    />
 
     <!-- Add Customer Form -->
     <div v-if="showAddForm" style="background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:14px 16px;margin-bottom:16px">
@@ -182,12 +190,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { api, planName, engagementTier, type Customer, type CustomerStats, type Upgrade, type MigrationProject } from '@/api/client'
 import { useCustomerDrill } from '@/composables/useCustomerDrill'
 import TenantDiscoveryModal from '@/components/TenantDiscoveryModal.vue'
+import CustomerExportModal from '@/components/CustomerExportModal.vue'
 
 const showDiscovery = ref(false)
+const showExport = ref(false)
+// The export's own sort — defaults to whatever's currently on screen, but
+// stays independent of it so choosing a different export order doesn't
+// re-sort the live table underneath the user.
+const exportSortKey = ref<SortKey>('name')
+const exportSortDir = ref<1 | -1>(1)
+watch(showExport, (open) => {
+  if (open) {
+    exportSortKey.value = sortKey.value
+    exportSortDir.value = sortDir.value
+  }
+})
 
 const { openCustomer } = useCustomerDrill()
 
@@ -367,6 +388,12 @@ function compareCustomers(key: SortKey, a: Customer, b: Customer): number {
 }
 
 const sorted = computed(() => [...filtered.value].sort((a, b) => sortDir.value * compareCustomers(sortKey.value, a, b)))
+
+// Same filtered set as the live table, but ordered by the export modal's
+// own chosen column/direction rather than whatever's currently on screen.
+const exportCustomerIds = computed(() =>
+  [...filtered.value].sort((a, b) => exportSortDir.value * compareCustomers(exportSortKey.value, a, b)).map(c => c.id)
+)
 
 function openCasesFor(id: number) {
   return openCaseCounts.value[id] ?? '—'

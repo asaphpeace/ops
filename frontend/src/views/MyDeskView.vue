@@ -112,7 +112,7 @@
 
         <div v-show="queueSupervisorExpanded" style="margin-top:6px">
         <div class="sub" style="font-size:9.5px;color:var(--text3);margin:6px 0 2px">Ticket-level — scoped to the toggle above</div>
-        <div class="stats-row sr-3">
+        <div class="stats-row sr-5">
           <div class="sc work-drill" :class="queueSlaBreachTickets.length ? 'alert' : ''" @click="toggleFlagDrill('SLA Breach', queueSlaBreachTickets)">
             <div class="lbl">SLA Breach</div>
             <div class="val">{{ queueSlaBreachTickets.length }}</div>
@@ -125,7 +125,17 @@
           <div class="sc work-drill" :class="briefing.flags.chase_needed_count ? 'warn' : ''" @click="toggleFlagDrill('Chase Needed', briefing.flags.chase_needed_tickets)">
             <div class="lbl">Chase Needed</div>
             <div class="val">{{ briefing.flags.chase_needed_count }}</div>
-            <div class="sub">5d+ awaiting customer</div>
+            <div class="sub">5-13d awaiting customer</div>
+          </div>
+          <div class="sc work-drill" :class="briefing.flags.chase_overdue_count ? 'alert' : ''" @click="toggleFlagDrill('Chase Overdue', briefing.flags.chase_overdue_tickets)">
+            <div class="lbl">Chase Overdue</div>
+            <div class="val">{{ briefing.flags.chase_overdue_count }}</div>
+            <div class="sub">14d+, still no reply</div>
+          </div>
+          <div class="sc work-drill" :class="briefing.flags.reply_missed_count ? 'alert' : ''" @click="toggleFlagDrill('Reply Missed', briefing.flags.reply_missed_tickets)">
+            <div class="lbl">Reply Missed</div>
+            <div class="val">{{ briefing.flags.reply_missed_count }}</div>
+            <div class="sub">customer replied, still marked waiting</div>
           </div>
         </div>
 
@@ -835,6 +845,7 @@ const queueSupervisorTotal = computed(() => {
   const f = briefing.value?.flags
   if (!f) return 0
   return queueSlaBreachTickets.value.length + f.stale_count + f.chase_needed_count +
+    f.chase_overdue_count + f.reply_missed_count +
     f.blocked_upgrade_count + f.renewal_under_60d_count + f.stalled_migration_count +
     f.cancellation_overdue_count + f.hypercare_count + f.certs_expiring_count + f.bug_fix_upgrade_overdue_count +
     f.unconfirmed_upgrade_count + f.pending_upgrade_missing_case_count +

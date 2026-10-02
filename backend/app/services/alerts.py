@@ -18,11 +18,12 @@ has no assignee/creator field to scope by yet.
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.database import AsyncSessionLocal
 from app.models.audit_log import AuditLog
+from app.models.case_comment import CaseComment
 from app.models.customer import Customer
 from app.models.upgrade import Upgrade
 
@@ -63,19 +64,86 @@ def is_stale_case(c) -> bool:
     return c.status == "Awaiting Dev" and c.days_open >= 14
 
 
-def chase_needed_days(c) -> int | None:
-    """Days since this ticket entered Awaiting Customer, when >= 5;
-    None otherwise (not applicable, or too recent). Prefers the real
-    status_changed_at when available (a locally-matched Case); falls back
-    to days_open — a coarser proxy — for a live-only ticket with no local
-    row yet. Stated plainly: the fallback isn't the same precision."""
+async def latest_customer_replies(db, jira_refs: list[str]) -> dict[str, datetime]:
+    """Real customer-authored comment timestamps, keyed by jira_ref — the
+    max `created` per ref among comments whose author_account_type is
+    confirmed "customer" (never a NULL/unconfirmed row, and never a team
+    member's own customer-visible reply — confirmed live that jsdPublic
+    alone isn't reliable for this, see CaseComment.author_account_type's
+    own docstring). This is what lets a genuinely-silent Awaiting-Customer
+    case be told apart from one where the customer already replied and
+    nobody's acted on it since."""
+    if not jira_refs:
+        return {}
+    result = await db.execute(
+        select(CaseComment.jira_ref, func.max(CaseComment.created))
+        .where(CaseComment.jira_ref.in_(jira_refs), CaseComment.author_account_type == "customer")
+        .group_by(CaseComment.jira_ref)
+    )
+    return dict(result.all())
+
+
+def reply_missed_days(c, latest_reply: dict[str, datetime]) -> int | None:
+    """Days since a real customer-authored comment landed AFTER this
+    case's status last changed — the customer already answered, but the
+    status was never flipped off Awaiting Customer to reflect it, so this
+    is now stuck on OUR side, not theirs. Needs a real status_changed_at
+    (a locally-matched Case); a live-only ticket with no local row has no
+    reliable baseline to compare against, so this always returns None for
+    those rather than guessing. Fires from day 1 (not a 2-week grace
+    window like chase_needed/chase_overdue below) — an unread reply is
+    actionable immediately, not something to sit on."""
+    if c.status != "Awaiting Customer":
+        return None
+    status_changed_at = getattr(c, "status_changed_at", None)
+    if not status_changed_at:
+        return None
+    reply_at = latest_reply.get(c.jira_ref)
+    if not reply_at or reply_at <= status_changed_at:
+        return None
+    days = (datetime.now(timezone.utc) - reply_at).days
+    return days if days >= 1 else None
+
+
+def chase_needed_days(c, latest_reply: dict[str, datetime]) -> int | None:
+    """Days since this ticket entered Awaiting Customer, when in [5, 14) —
+    14d+ escalates to chase_overdue_days() instead (a separate, harder
+    alert type) rather than this one just growing an ever-larger day count
+    with no visual distinction. Returns None when the customer already
+    replied after status_changed_at — that's reply_missed_days()'s job,
+    not this one's, since the case isn't genuinely "awaiting" anymore.
+    Prefers the real status_changed_at when available (a locally-matched
+    Case); falls back to days_open — a coarser proxy — for a live-only
+    ticket with no local row yet. Stated plainly: the fallback isn't the
+    same precision."""
+    if reply_missed_days(c, latest_reply) is not None:
+        return None
     if c.status != "Awaiting Customer":
         return None
     if getattr(c, "status_changed_at", None):
         days = (datetime.now(timezone.utc) - c.status_changed_at).days
     else:
         days = c.days_open
-    return days if days >= 5 else None
+    return days if 5 <= days < 14 else None
+
+
+def chase_overdue_days(c, latest_reply: dict[str, datetime]) -> int | None:
+    """14d+ genuinely silent in Awaiting Customer — chase_needed's harder,
+    separately-alerted escalation tier (own alert type, not just a bigger
+    number inside chase_needed, so it doesn't blend into the same visual
+    weight as a 6-day-old case). Mutually exclusive with both
+    chase_needed_days (day-range split at 14) and reply_missed_days (a
+    real customer reply since status changed means this isn't "on them"
+    anymore)."""
+    if reply_missed_days(c, latest_reply) is not None:
+        return None
+    if c.status != "Awaiting Customer":
+        return None
+    if getattr(c, "status_changed_at", None):
+        days = (datetime.now(timezone.utc) - c.status_changed_at).days
+    else:
+        days = c.days_open
+    return days if days >= 14 else None
 
 
 async def compute_alerts(db, scope: str = "team") -> list[dict]:
@@ -87,6 +155,9 @@ async def compute_alerts(db, scope: str = "team") -> list[dict]:
     cases = await _live_open_cases(db)
     if scope == "me":
         cases = [c for c in cases if c.assigned_to == YOU]
+
+    awaiting_refs = [c.jira_ref for c in cases if c.status == "Awaiting Customer"]
+    latest_reply = await latest_customer_replies(db, awaiting_refs)
 
     alerts: list[dict] = []
     for c in cases:
@@ -101,11 +172,23 @@ async def compute_alerts(db, scope: str = "team") -> list[dict]:
                 "type": "stale", "jira_ref": c.jira_ref, "customer_name": cname,
                 "detail": f"{c.days_open}d with no dev resolution", "assignee_name": c.assigned_to,
             })
-        chase_days = chase_needed_days(c)
+        chase_days = chase_needed_days(c, latest_reply)
         if chase_days is not None:
             alerts.append({
                 "type": "chase_needed", "jira_ref": c.jira_ref, "customer_name": cname,
                 "detail": f"{chase_days}d awaiting customer response", "assignee_name": c.assigned_to,
+            })
+        overdue_days = chase_overdue_days(c, latest_reply)
+        if overdue_days is not None:
+            alerts.append({
+                "type": "chase_overdue", "jira_ref": c.jira_ref, "customer_name": cname,
+                "detail": f"{overdue_days}d awaiting customer response, still no reply", "assignee_name": c.assigned_to,
+            })
+        reply_days = reply_missed_days(c, latest_reply)
+        if reply_days is not None:
+            alerts.append({
+                "type": "reply_missed", "jira_ref": c.jira_ref, "customer_name": cname,
+                "detail": f"customer replied {reply_days}d ago, still marked Awaiting Customer", "assignee_name": c.assigned_to,
             })
 
     upg_result = await db.execute(
@@ -139,10 +222,12 @@ async def _renewal_alerts(db) -> list[dict]:
 
 _ALERT_KEY_FIELD = {
     "sla_breach": "jira_ref", "stale": "jira_ref", "chase_needed": "jira_ref",
+    "chase_overdue": "jira_ref", "reply_missed": "jira_ref",
     "blocked_upgrade": "upgrade_id", "renewal": "customer_name",
 }
 _ALERT_EMOJI = {
-    "sla_breach": "⚠️", "stale": "🕓", "chase_needed": "📬", "blocked_upgrade": "🔧", "renewal": "📅",
+    "sla_breach": "⚠️", "stale": "🕓", "chase_needed": "📬", "chase_overdue": "🚨",
+    "reply_missed": "📨", "blocked_upgrade": "🔧", "renewal": "📅",
 }
 
 

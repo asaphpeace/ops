@@ -23,6 +23,11 @@ class UpgradeCreate(BaseModel):
 
 class UpgradeUpdate(BaseModel):
     stage: str | None = None
+    # Correctable after creation — same reasoning as Customer.prod_version's
+    # own gap: some completed upgrades never got a real version recorded
+    # (e.g. synced from a ticket with no parseable version, stored as
+    # "Unknown") and there was previously no way to fix that except raw SQL.
+    to_version: str | None = None
     blocked: bool | None = None
     blocked_reason: str | None = None
     scheduled_at: datetime | None = None

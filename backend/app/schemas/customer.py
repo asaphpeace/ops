@@ -94,6 +94,7 @@ class NoteOut(BaseModel):
     text: str
     author: str
     created_at: datetime
+    is_sticky: bool
 
     model_config = {"from_attributes": True}
 
@@ -211,3 +212,10 @@ class CustomerUpdate(BaseModel):
     after_hours_eligible: bool | None = None
     after_hours_limit: int | None = None
     jvm_client: bool | None = None
+    # Editable despite being system-derived from CustomerTenantInfo.release
+    # where that sync exists — most customers have no synced tenant row at
+    # all, so this is the only way to correct a real, known-wrong version
+    # (e.g. Customer.prod_version's fake seed-only defaults) without a raw
+    # SQL update. A later real tenant-info sync still overwrites this, same
+    # as it always has (customers.py's sync_tenant_info()).
+    prod_version: str | None = None

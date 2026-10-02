@@ -28,10 +28,54 @@ import logging
 import re
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.jira import _COMPANY_SUFFIXES
 
 logger = logging.getLogger(__name__)
+
+_VERSION_NUM = re.compile(r"\d+")
+
+
+def _version_tuple(v: str | None) -> tuple[int, ...] | None:
+    """Real element-wise version comparison — same fix as releases.py's own
+    _version_tuple (a naive parseFloat("8.30") < parseFloat("8.9") is a real
+    bug for two-digit minors). Kept as its own small copy here rather than
+    importing a router's private helper into a service module."""
+    if not v:
+        return None
+    parts = _VERSION_NUM.findall(v)
+    return tuple(int(p) for p in parts) if parts else None
+
+
+async def latest_completed_upgrade_version(db: AsyncSession, customer_id: int, environment: str) -> str | None:
+    """The most recent real, parseable to_version from a Verified Done
+    Upgrade for this customer+environment — the fallback source of truth
+    when the live tenant probe can't be reached (confirmed real gap:
+    Spliethoff's PROD tenant sync has been timing out since 2026-09-08,
+    leaving CustomerTenantInfo.release/Customer.prod_version stuck on a
+    Feb-2026 value while a real completed PROD upgrade to 8.31.3 already
+    exists locally). "Unknown" and blank to_version values are skipped —
+    they're not a real fact to fall back to."""
+    from app.models.upgrade import Upgrade
+
+    result = await db.execute(
+        select(Upgrade).where(
+            Upgrade.customer_id == customer_id,
+            Upgrade.environment == environment,
+            Upgrade.stage == "Verified Done",
+        )
+    )
+    best: tuple[tuple[int, ...], str, object] | None = None
+    for u in result.scalars().all():
+        tup = _version_tuple(u.to_version)
+        if tup is None:
+            continue
+        when = u.date_done or u.verified_at
+        if best is None or (when is not None and (best[2] is None or when > best[2])):
+            best = (tup, u.to_version, when)
+    return best[1] if best else None
 
 
 class TenantInfoResult:

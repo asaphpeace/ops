@@ -1,6 +1,7 @@
-from datetime import date as dt_date, datetime
+from datetime import date as dt_date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from app.models.migration_project import MigrationProject
 from app.models.release import Release
 from app.models.note import CustomerNote
 from app.models.customer_contact import CustomerContact
+from app.models.upgrade import Upgrade
 from app.schemas.customer import CustomerOut, CustomerDetail, CustomerCreate, CustomerUpdate, NoteOut, ContactOut
 from app.schemas.customer_tenant_info import TenantInfoCreate, TenantInfoOut
 from app.services.jira import customer_case_stats, real_open_counts_by_customer, resolve_customer_contacts
@@ -362,6 +364,11 @@ async def get_customer(customer_id: int, db: AsyncSession = Depends(get_db)):
 # regardless of tier before this was enforced here.
 TIER_UPGRADE_LIMITS = {"Scale": 4, "Strategic": 8, "Premier": 12}
 
+# Same mapping as frontend/src/api/client.ts's TIER_PLAN_NAMES — kept in
+# sync manually since this is the one backend read site that needs the
+# plan label rather than just the raw tier (the customer PDF export).
+TIER_PLAN_NAMES = {"Scale": "Starter", "Strategic": "Professional", "Premier": "Enterprise"}
+
 # Premier is the only tier whose package includes after-hours upgrade slots
 # by default (4/yr — half the PROD allowance, in line with the "nominally
 # 2hr" after-hours billing unit). Scale/Strategic default to ineligible but
@@ -554,8 +561,12 @@ async def sync_tenant_info(customer_id: int, environment: str, db: AsyncSession 
     the WildFly inference on this same panel's Overview tab) already reads
     those two fields directly, so this is what actually makes a sync here
     "reflect everywhere" rather than only updating the Technical tab's own
-    CustomerTenantInfo row."""
-    from app.services.tenant_info import fetch_tenant_info
+    CustomerTenantInfo row. When the probe fails instead (tenant
+    unreachable), those same two fields fall back to the latest real
+    completed Upgrade for this customer+environment — see
+    latest_completed_upgrade_version() — rather than staying stuck on
+    whatever CustomerTenantInfo.release last happened to hold."""
+    from app.services.tenant_info import fetch_tenant_info, latest_completed_upgrade_version
 
     result = await db.execute(
         select(CustomerTenantInfo).where(
@@ -572,6 +583,21 @@ async def sync_tenant_info(customer_id: int, environment: str, db: AsyncSession 
     matched_incidents: list[dict] = []
     if probe.error:
         row.last_sync_error = probe.error
+        # The live tenant is unreachable, but a real completed Upgrade for
+        # this customer+environment is still better local knowledge than a
+        # possibly-months-stale cached release — fill Customer.prod_version/
+        # test_version in from it (real gap: Spliethoff's PROD sync has been
+        # timing out since 2026-09-08 while a real completed PROD upgrade to
+        # 8.31.3 already existed locally and was never reflected anywhere).
+        if environment in ("PROD", "TEST"):
+            fallback_version = await latest_completed_upgrade_version(db, customer_id, environment)
+            if fallback_version:
+                customer = (await db.execute(select(Customer).where(Customer.id == customer_id))).scalar_one_or_none()
+                if customer:
+                    if environment == "PROD":
+                        customer.prod_version = fallback_version
+                    else:
+                        customer.test_version = fallback_version
     else:
         data = probe.data or {}
         row.release = data.get("release")
@@ -722,8 +748,28 @@ async def create_note(customer_id: int, data: dict, db: AsyncSession = Depends(g
     customer = (await db.execute(select(Customer).where(Customer.id == customer_id))).scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    note = CustomerNote(customer_id=customer_id, text=text, author=data.get("author") or "Asaph")
+    note = CustomerNote(
+        customer_id=customer_id, text=text, author=data.get("author") or "Asaph",
+        is_sticky=bool(data.get("is_sticky", False)),
+    )
     db.add(note)
+    await db.commit()
+    await db.refresh(note)
+    return note
+
+
+@router.patch("/{customer_id}/notes/{note_id}", response_model=NoteOut)
+async def update_note(customer_id: int, note_id: int, data: dict, db: AsyncSession = Depends(get_db)):
+    """Pin/un-pin only for now — the note's own text is never edited here,
+    matching how every other note-taking surface in this app treats a
+    note as an append-only record."""
+    note = (
+        await db.execute(select(CustomerNote).where(CustomerNote.id == note_id, CustomerNote.customer_id == customer_id))
+    ).scalar_one_or_none()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if "is_sticky" in data:
+        note.is_sticky = bool(data["is_sticky"])
     await db.commit()
     await db.refresh(note)
     return note
@@ -787,3 +833,83 @@ async def customer_campaigns(customer_id: int, db: AsyncSession = Depends(get_db
         for c in campaigns
         if target in c.customer_ids.split(",")
     ]
+
+
+class CustomerExportRequest(BaseModel):
+    # Explicit, ordered list of customer ids — the frontend sends exactly
+    # the rows currently on screen (already filtered/sorted per the user's
+    # own view), so "what you see is what exports" rather than silently
+    # re-deriving a possibly-different set server-side.
+    customer_ids: list[int]
+    # Caller's chosen subset of customer_export_pdf.COLUMN_ORDER, in
+    # display order. Health and Renewal are never accepted here — see
+    # that module's own docstring for why both are hard-excluded, not
+    # just default-off.
+    columns: list[str]
+
+
+@router.post("/export-pdf")
+async def export_customers_pdf(data: CustomerExportRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.customer_export_pdf import COLUMN_ORDER, render_pdf
+
+    columns = [c for c in data.columns if c in COLUMN_ORDER]
+    if not columns:
+        raise HTTPException(status_code=400, detail="At least one valid column is required")
+    if not data.customer_ids:
+        raise HTTPException(status_code=400, detail="No customers to export")
+
+    result = await db.execute(select(Customer).where(Customer.id.in_(data.customer_ids)))
+    by_id = {c.id: c for c in result.scalars().all()}
+    # Preserve the caller's exact order (the live table's current sort),
+    # silently dropping any id that no longer resolves rather than erroring
+    # the whole export over one stale row.
+    ordered = [by_id[cid] for cid in data.customer_ids if cid in by_id]
+
+    # Each of these joins only runs when the corresponding column was
+    # actually requested — a lean column selection (the whole point of
+    # letting the caller pick) stays a lean, fast export.
+    days_since_by_id: dict[int, int | None] = {}
+    if "days_since_upgrade" in columns:
+        upg_result = await db.execute(
+            select(Upgrade).where(
+                Upgrade.customer_id.in_(data.customer_ids), Upgrade.stage == "Verified Done",
+                Upgrade.environment == "PROD", Upgrade.date_done.is_not(None),
+            )
+        )
+        latest_done: dict[int, datetime] = {}
+        for u in upg_result.scalars().all():
+            if u.customer_id not in latest_done or u.date_done > latest_done[u.customer_id]:
+                latest_done[u.customer_id] = u.date_done
+        now = datetime.now(timezone.utc)
+        days_since_by_id = {cid: (now - d).days for cid, d in latest_done.items()}
+
+    migration_by_id: dict[int, str] = {}
+    if "migration" in columns:
+        mig_result = await db.execute(select(MigrationProject).where(MigrationProject.customer_id.in_(data.customer_ids)))
+        migration_by_id = {m.customer_id: m.stage for m in mig_result.scalars().all()}
+
+    open_cases_by_id: dict[int, int] = {}
+    if "open_cases" in columns:
+        counts = await real_open_counts_by_customer(db)
+        open_cases_by_id = {cid: v["open_count"] for cid, v in counts.items()}
+
+    rows = [
+        {
+            "id": c.id, "name": c.name, "tier": c.tier, "csm": c.csm,
+            "package": TIER_PLAN_NAMES.get(c.tier, c.tier), "prod_version": c.prod_version,
+            "infra": c.infra, "jvm_client": c.jvm_client,
+            "upgrades_used": c.upgrades_used, "upgrades_limit": c.upgrades_limit,
+            "days_since_upgrade": days_since_by_id.get(c.id),
+            "migration_stage": migration_by_id.get(c.id),
+            "open_cases": open_cases_by_id.get(c.id),
+        }
+        for c in ordered
+    ]
+
+    generated_at = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
+    pdf_bytes = render_pdf(rows, columns, generated_at)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="sedna-ops-customer-version-list.pdf"'},
+    )

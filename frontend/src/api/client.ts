@@ -422,6 +422,7 @@ export interface CustomerNoteEntry {
   text: string
   author: string
   created_at: string
+  is_sticky: boolean
 }
 
 // A structured, stored email contact for this customer — distinct from
@@ -1819,6 +1820,10 @@ export interface DeskFlags {
   stale_tickets: DrillTicket[]
   chase_needed_count: number
   chase_needed_tickets: (DrillTicket & { days_waiting: number })[]
+  chase_overdue_count: number
+  chase_overdue_tickets: (DrillTicket & { days_waiting: number })[]
+  reply_missed_count: number
+  reply_missed_tickets: (DrillTicket & { days_since_reply: number })[]
   blocked_upgrade_count: number
   blocked_upgrades: { id: number; jira_ref: string | null; customer_id: number | null; customer_name: string | null; blocked_reason: string | null }[]
   mentioned_count: number
@@ -2154,7 +2159,10 @@ export const api = {
     syncTenantInfo: (id: number, environment: string) =>
       client.post<TenantInfo>(`/customers/${id}/tenant-info/${environment}/sync`, {}),
     notes: (id: number) => client.get<CustomerNoteEntry[]>(`/customers/${id}/notes`),
-    addNote: (id: number, text: string) => client.post<CustomerNoteEntry>(`/customers/${id}/notes`, { text }),
+    addNote: (id: number, text: string, isSticky = false) =>
+      client.post<CustomerNoteEntry>(`/customers/${id}/notes`, { text, is_sticky: isSticky }),
+    setNoteSticky: (id: number, noteId: number, isSticky: boolean) =>
+      client.patch<CustomerNoteEntry>(`/customers/${id}/notes/${noteId}`, { is_sticky: isSticky }),
     contacts: (id: number) => client.get<CustomerContactEntry[]>(`/customers/${id}/contacts`),
     addContact: (id: number, email: string) => client.post<CustomerContactEntry>(`/customers/${id}/contacts`, { email }),
     deleteContact: (id: number, contactId: number) => client.delete(`/customers/${id}/contacts/${contactId}`),
@@ -2167,6 +2175,8 @@ export const api = {
     resolveContacts: (customerIds: number[]) =>
       client.post<CustomerContactResolution[]>('/customers/notify/resolve-contacts', { customer_ids: customerIds }),
     campaigns: (id: number) => client.get<CustomerCampaignSummary[]>(`/customers/${id}/campaigns`),
+    exportPdf: (customerIds: number[], columns: string[]) =>
+      client.post(`/customers/export-pdf`, { customer_ids: customerIds, columns }, { responseType: 'blob' }),
   },
 
   tenantDiscovery: {

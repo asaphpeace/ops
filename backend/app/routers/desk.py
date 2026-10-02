@@ -864,10 +864,14 @@ async def desk_briefing(since: str | None = None, scope: str = "team", db: Async
     # live-Jira round trip) and the same predicates alerts.py's scheduled
     # job runs, so "what's live on the page" and "what the 15-min job would
     # alert on" can never drift into two different answers.
-    from app.services.alerts import is_stale_case, chase_needed_days
+    from app.services.alerts import is_stale_case, chase_needed_days, chase_overdue_days, reply_missed_days, latest_customer_replies
     scoped_cases = [c for c in cases if c.assigned_to == YOU] if scope == "me" else cases
     stale_cases = [c for c in scoped_cases if is_stale_case(c)]
-    chase_cases = [(c, chase_needed_days(c)) for c in scoped_cases if chase_needed_days(c) is not None]
+    awaiting_refs = [c.jira_ref for c in scoped_cases if c.status == "Awaiting Customer"]
+    latest_reply = await latest_customer_replies(db, awaiting_refs)
+    chase_cases = [(c, chase_needed_days(c, latest_reply)) for c in scoped_cases if chase_needed_days(c, latest_reply) is not None]
+    chase_overdue_cases = [(c, chase_overdue_days(c, latest_reply)) for c in scoped_cases if chase_overdue_days(c, latest_reply) is not None]
+    reply_missed_cases = [(c, reply_missed_days(c, latest_reply)) for c in scoped_cases if reply_missed_days(c, latest_reply) is not None]
     blocked_upgrades_result = await db.execute(
         select(Upgrade).where(Upgrade.blocked == True, Upgrade.stage != "Verified Done")  # noqa: E712
         .options(joinedload(Upgrade.customer))
@@ -981,6 +985,10 @@ async def desk_briefing(since: str | None = None, scope: str = "team", db: Async
         "stale_tickets": [_sla_ticket(c) for c in stale_cases],
         "chase_needed_count": len(chase_cases),
         "chase_needed_tickets": [{**_sla_ticket(c), "days_waiting": days} for c, days in chase_cases],
+        "chase_overdue_count": len(chase_overdue_cases),
+        "chase_overdue_tickets": [{**_sla_ticket(c), "days_waiting": days} for c, days in chase_overdue_cases],
+        "reply_missed_count": len(reply_missed_cases),
+        "reply_missed_tickets": [{**_sla_ticket(c), "days_since_reply": days} for c, days in reply_missed_cases],
         # Always team-wide — Upgrade has no assignee/creator field to scope by.
         "blocked_upgrade_count": len(blocked_upgrades),
         "blocked_upgrades": [
