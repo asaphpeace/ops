@@ -988,6 +988,38 @@ export interface Runbook {
   updated_at: string
 }
 
+export interface DevTeamMember {
+  id: number
+  team_id: number
+  display_name: string
+  jira_name: string | null
+  role: 'PM' | 'EL' | null
+  sort_order: number
+}
+
+export interface DevTeam {
+  id: number
+  key: string
+  name: string
+  emoji: string | null
+  notes: string | null
+  sort_order: number
+  members: DevTeamMember[]
+}
+
+export interface VmsModule {
+  id: number
+  name: string
+  group_name: string
+  team_id: number | null
+  notes: string | null
+}
+
+export interface TeamsRouting {
+  teams: DevTeam[]
+  modules: VmsModule[]
+}
+
 export interface EngineeringTriageCheck {
   mark: string
   color: string
@@ -2322,6 +2354,17 @@ export const api = {
     review: (id: number) => client.post<AiObservation>(`/ai-observations/${id}/review`, {}),
     dismiss: (id: number) => client.post<AiObservation>(`/ai-observations/${id}/dismiss`, {}),
     recompute: () => client.post<{ created: number }>('/ai-observations/recompute', {}),
+  },
+
+  teams: {
+    list: () => client.get<TeamsRouting>('/teams'),
+    updateTeam: (id: number, data: Partial<Pick<DevTeam, 'name' | 'emoji' | 'notes'>>) => client.patch<DevTeam>(`/teams/${id}`, data),
+    addMember: (teamId: number, data: Partial<DevTeamMember>) => client.post<DevTeamMember>(`/teams/${teamId}/members`, data),
+    updateMember: (id: number, data: Partial<DevTeamMember>) => client.patch<DevTeamMember>(`/teams/members/${id}`, data),
+    removeMember: (id: number) => client.delete<void>(`/teams/members/${id}`),
+    createModule: (data: Partial<VmsModule>) => client.post<VmsModule>('/teams/modules', data),
+    updateModule: (id: number, data: Partial<VmsModule>) => client.patch<VmsModule>(`/teams/modules/${id}`, data),
+    deleteModule: (id: number) => client.delete<void>(`/teams/modules/${id}`),
   },
 
   opsNotes: {

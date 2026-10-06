@@ -25,6 +25,7 @@ const tabs = [
   { id: 'ollama', label: 'Ollama' },
   { id: 'troubleshoot', label: 'Troubleshoot' },
   { id: 'knowledge', label: 'Knowledge' },
+  { id: 'teams', label: 'Teams & Routing' },
   { id: 'audit-log', label: 'Audit Log' },
 ] as const
 type TabId = typeof tabs[number]['id']
@@ -37,6 +38,7 @@ const components: Record<TabId, ReturnType<typeof defineAsyncComponent>> = {
   ollama: defineAsyncComponent(() => import('@/views/OllamaControlView.vue')),
   troubleshoot: defineAsyncComponent(() => import('@/views/TroubleshootView.vue')),
   knowledge: defineAsyncComponent(() => import('@/views/KnowledgeView.vue')),
+  teams: defineAsyncComponent(() => import('@/views/TeamsRoutingView.vue')),
   'audit-log': defineAsyncComponent(() => import('@/views/AuditLogView.vue')),
 }
 

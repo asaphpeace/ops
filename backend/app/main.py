@@ -10,7 +10,7 @@ from app.config import settings
 from app.scheduler import init_scheduler
 from app.routers import health, auth
 from app.routers import customers, cases, upgrades, releases, seed, migrations, education, sso, cancellations, campaigns
-from app.routers import jira as jira_router, snapshot, desk, support_signals, bugs, command_center, vms_sandbox, incidents, tenant_discovery, ai_observations, ops_notes, ollama_chat, knowledge, migration_priority, audit_log, weekly_report, engineering, troubleshoot
+from app.routers import jira as jira_router, snapshot, desk, support_signals, bugs, command_center, vms_sandbox, incidents, tenant_discovery, ai_observations, ops_notes, ollama_chat, knowledge, migration_priority, audit_log, weekly_report, engineering, troubleshoot, teams
 import app.models.jira_unmatched  # noqa: F401 — ensures table is registered with Base
 import app.models.aws_resource  # noqa: F401
 import app.models.log_entry  # noqa: F401
@@ -27,6 +27,7 @@ import app.models.ollama_search_index  # noqa: F401
 import app.models.knowledge_extract  # noqa: F401
 import app.models.engineering_snapshot  # noqa: F401
 import app.models.runbook  # noqa: F401
+import app.models.dev_team  # noqa: F401
 
 # Paths that never require a token (prefix-matched against the FastAPI path,
 # i.e. after nginx has already stripped the /api prefix)
@@ -112,6 +113,7 @@ app.include_router(knowledge.router)
 app.include_router(migration_priority.router)
 app.include_router(engineering.router)
 app.include_router(troubleshoot.router)
+app.include_router(teams.router)
 app.include_router(seed.router)
 
 

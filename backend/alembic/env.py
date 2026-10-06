@@ -42,6 +42,7 @@ from app.models.aws_resource import AwsResource, AwsResourceMetricSnapshot  # no
 from app.models.log_entry import LogEntry  # noqa: F401
 from app.models.engineering_snapshot import EngineeringDailySnapshot  # noqa: F401
 from app.models.runbook import Runbook  # noqa: F401
+from app.models.dev_team import DevTeam, DevTeamMember, VmsModule  # noqa: F401
 
 config = context.config
 
