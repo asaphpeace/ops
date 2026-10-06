@@ -2209,6 +2209,8 @@ export const api = {
     campaigns: (id: number) => client.get<CustomerCampaignSummary[]>(`/customers/${id}/campaigns`),
     exportPdf: (customerIds: number[], columns: string[]) =>
       client.post(`/customers/export-pdf`, { customer_ids: customerIds, columns }, { responseType: 'blob' }),
+    exportXlsx: (customerIds: number[], columns: string[]) =>
+      client.post(`/customers/export-xlsx`, { customer_ids: customerIds, columns }, { responseType: 'blob' }),
   },
 
   tenantDiscovery: {

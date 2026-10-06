@@ -5,7 +5,7 @@
         <div class="cxm-head">
           <div>
             <div class="cxm-eyebrow">⭳ Export</div>
-            <h3 class="cxm-title">Export Customer Version List to PDF</h3>
+            <h3 class="cxm-title">Export Customer Version List</h3>
           </div>
           <button class="cxm-close" @click="close" title="Close">✕</button>
         </div>
@@ -13,8 +13,14 @@
         <div class="cxm-body">
           <p class="cxm-sub">
             Exports the {{ customerCount }} customer{{ customerCount === 1 ? '' : 's' }} matching your
-            active filters, styled to match the app.
+            active filters{{ format === 'pdf' ? ', styled to match the app' : ', as a sortable, filterable spreadsheet' }}.
           </p>
+
+          <div class="cxm-format">
+            <button v-for="f in FORMATS" :key="f.id" class="cxm-format-btn" :class="{ active: format === f.id }" @click="format = f.id">
+              {{ f.label }}
+            </button>
+          </div>
 
           <div class="cxm-sortrow">
             <label class="cxm-sortlabel">Sort by</label>
@@ -40,7 +46,7 @@
           <div class="cxm-actions">
             <button class="btn btn-g btn-sm" @click="close">Cancel</button>
             <button class="btn btn-sm" :disabled="!selected.length || exporting || !customerCount" @click="runExport">
-              {{ exporting ? 'Generating…' : '⭳ Export PDF' }}
+              {{ exporting ? 'Generating…' : `⭳ Export ${format === 'pdf' ? 'PDF' : 'Excel'}` }}
             </button>
           </div>
           <div v-if="errorMsg" class="cxm-error">{{ errorMsg }}</div>
@@ -51,8 +57,8 @@
 </template>
 
 <script setup lang="ts">
-// Column-selectable PDF export of the live Customer Intelligence table —
-// mirrors backend/app/services/customer_export_pdf.py's COLUMN_ORDER/LABELS
+// Column-selectable PDF or Excel export of the live Customer Intelligence
+// table — mirrors backend/app/services/customer_export_pdf.py's COLUMN_ORDER/LABELS
 // exactly. Renewal and Health are deliberately never offered here (see
 // customer_export_pdf.py's own module docstring for why) — this isn't a
 // default-off toggle, they're not in EXPORT_COLUMNS at all.
@@ -77,9 +83,19 @@ const EXPORT_COLUMNS: { key: string; label: string }[] = [
   { key: 'upgrades', label: 'Upgrades' },
   { key: 'open_cases', label: 'Open Cases' },
   { key: 'migration', label: 'Migration' },
+  { key: 'primary_contact', label: 'Primary Contact Email' },
 ]
+// Off by default: the email column is wide and would squeeze the existing
+// PDF layout for anyone who didn't ask for it.
+const DEFAULT_OFF = new Set(['primary_contact'])
 
-const selected = ref<string[]>(EXPORT_COLUMNS.map(c => c.key))
+const FORMATS = [
+  { id: 'pdf', label: 'PDF' },
+  { id: 'xlsx', label: 'Excel (.xlsx)' },
+] as const
+const format = ref<typeof FORMATS[number]['id']>('pdf')
+
+const selected = ref<string[]>(EXPORT_COLUMNS.filter(c => !DEFAULT_OFF.has(c.key)).map(c => c.key))
 const exporting = ref(false)
 const errorMsg = ref('')
 
@@ -94,12 +110,17 @@ async function runExport() {
   exporting.value = true
   errorMsg.value = ''
   try {
-    const res = await api.customers.exportPdf(props.customerIds, selected.value)
-    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const isPdf = format.value === 'pdf'
+    const res = isPdf
+      ? await api.customers.exportPdf(props.customerIds, selected.value)
+      : await api.customers.exportXlsx(props.customerIds, selected.value)
+    const blob = new Blob([res.data], {
+      type: isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'sedna-ops-customer-version-list.pdf'
+    a.download = `sedna-ops-customer-version-list.${format.value}`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -143,6 +164,10 @@ function close() {
 
 .cxm-body { padding: 20px 22px; overflow-y: auto; flex: 1; }
 .cxm-sub { font-size: 11.5px; line-height: 1.5; color: var(--text2); margin-bottom: 14px; }
+
+.cxm-format { display: flex; gap: 4px; padding: 3px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; margin-bottom: 14px; }
+.cxm-format-btn { flex: 1; background: none; border: none; border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 700; color: var(--text2); cursor: pointer; }
+.cxm-format-btn.active { background: var(--accent-dim); color: var(--accent); }
 
 .cxm-sortrow { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .cxm-sortlabel { font-size: 11px; color: var(--text3); }

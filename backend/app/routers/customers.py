@@ -848,9 +848,10 @@ class CustomerExportRequest(BaseModel):
     columns: list[str]
 
 
-@router.post("/export-pdf")
-async def export_customers_pdf(data: CustomerExportRequest, db: AsyncSession = Depends(get_db)):
-    from app.services.customer_export_pdf import COLUMN_ORDER, render_pdf
+async def _customer_export_rows(data: CustomerExportRequest, db: AsyncSession) -> tuple[list[str], list[dict]]:
+    """Validated columns + resolved row dicts, shared by the PDF and Excel
+    exports so both formats always contain exactly the same data."""
+    from app.services.customer_export_pdf import COLUMN_ORDER
 
     columns = [c for c in data.columns if c in COLUMN_ORDER]
     if not columns:
@@ -893,6 +894,16 @@ async def export_customers_pdf(data: CustomerExportRequest, db: AsyncSession = D
         counts = await real_open_counts_by_customer(db)
         open_cases_by_id = {cid: v["open_count"] for cid, v in counts.items()}
 
+    primary_contacts_by_id: dict[int, list[str]] = {}
+    if "primary_contact" in columns:
+        pc_result = await db.execute(
+            select(CustomerContact)
+            .where(CustomerContact.customer_id.in_(data.customer_ids), CustomerContact.is_primary.is_(True))
+            .order_by(CustomerContact.email)
+        )
+        for pc in pc_result.scalars().all():
+            primary_contacts_by_id.setdefault(pc.customer_id, []).append(pc.email)
+
     rows = [
         {
             "id": c.id, "name": c.name, "tier": c.tier, "csm": c.csm,
@@ -902,14 +913,35 @@ async def export_customers_pdf(data: CustomerExportRequest, db: AsyncSession = D
             "days_since_upgrade": days_since_by_id.get(c.id),
             "migration_stage": migration_by_id.get(c.id),
             "open_cases": open_cases_by_id.get(c.id),
+            "primary_contacts": primary_contacts_by_id.get(c.id, []),
         }
         for c in ordered
     ]
+    return columns, rows
 
+
+@router.post("/export-pdf")
+async def export_customers_pdf(data: CustomerExportRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.customer_export_pdf import render_pdf
+
+    columns, rows = await _customer_export_rows(data, db)
     generated_at = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
     pdf_bytes = render_pdf(rows, columns, generated_at)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="sedna-ops-customer-version-list.pdf"'},
+    )
+
+
+@router.post("/export-xlsx")
+async def export_customers_xlsx(data: CustomerExportRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.customer_export_xlsx import render_xlsx
+
+    columns, rows = await _customer_export_rows(data, db)
+    generated_at = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
+    return Response(
+        content=render_xlsx(rows, columns, generated_at),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="sedna-ops-customer-version-list.xlsx"'},
     )

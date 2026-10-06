@@ -5,7 +5,7 @@
       <div style="display:flex;gap:6px">
         <RouterLink to="/customers/comms" class="btn btn-g btn-sm" style="text-decoration:none">📢 Customer Comms</RouterLink>
         <button class="btn btn-g btn-sm" @click="showDiscovery = true">🔍 Discover Tenants</button>
-        <button class="btn btn-g btn-sm" @click="showExport = true">⭳ Export PDF</button>
+        <button class="btn btn-g btn-sm" @click="showExport = true">⭳ Export</button>
         <button class="btn btn-g btn-sm">Import CSV</button>
         <button class="btn" @click="toggleAddForm">{{ showAddForm ? '✕ Cancel' : '+ Add Customer' }}</button>
       </div>

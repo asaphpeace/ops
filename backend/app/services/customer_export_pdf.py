@@ -20,6 +20,7 @@ see COLUMN_ORDER below for the full exportable set and COLUMN_LABELS for
 the header text (kept in sync with the frontend's own column labels).
 """
 import io
+from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle
@@ -36,13 +37,13 @@ from app.services.pdf_theme import (
 # uses. Renewal and Health are not in this list at all — see module docstring.
 COLUMN_ORDER = [
     "name", "tier", "csm", "package", "prod_version", "infra",
-    "days_since_upgrade", "upgrades", "open_cases", "migration",
+    "days_since_upgrade", "upgrades", "open_cases", "migration", "primary_contact",
 ]
 COLUMN_LABELS = {
     "name": "Customer", "tier": "Tier", "csm": "CSM",
     "package": "Package", "prod_version": "Prod Version", "infra": "Infra",
     "days_since_upgrade": "Days Since Upgrade", "upgrades": "Upgrades",
-    "open_cases": "Open Cases", "migration": "Migration",
+    "open_cases": "Open Cases", "migration": "Migration", "primary_contact": "Primary Contact",
 }
 # Relative width weights (cm) at the live table's own proportions — narrow
 # badge columns stay narrow, Customer gets the most room. Scaled to fill
@@ -50,7 +51,7 @@ COLUMN_LABELS = {
 _COLUMN_WEIGHTS = {
     "name": 4.6, "tier": 1.9, "csm": 2.0, "package": 2.2,
     "prod_version": 2.4, "infra": 1.7, "days_since_upgrade": 2.6,
-    "upgrades": 1.8, "open_cases": 1.8, "migration": 2.2,
+    "upgrades": 1.8, "open_cases": 1.8, "migration": 2.2, "primary_contact": 4.4,
 }
 
 _TIER_COLORS = {"Premier": (AMBER_DIM, AMBER), "Strategic": (PURPLE_DIM, PURPLE), "Scale": (ACCENT_DIM, ACCENT)}
@@ -160,6 +161,11 @@ def _render_cell(ss, key: str, row: dict, width: float):
         return _p(oc if oc is not None else "—", ss["TableCell"])
     if key == "migration":
         return _migration_cell(ss, row.get("migration_stage"))
+    if key == "primary_contact":
+        emails = row.get("primary_contacts") or []
+        if not emails:
+            return _p("—", ss["TableCellMuted"])
+        return Paragraph("<br/>".join(escape(e) for e in emails), ss["TableCell"])
     return _p("—", ss["TableCellMuted"])
 
 
