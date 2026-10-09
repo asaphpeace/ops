@@ -429,6 +429,46 @@ export interface CustomerNoteEntry {
 // CustomerContactResolution (a live, on-demand Jira-org lookup used by the
 // Notify Customers flow). This is the validated, persisted contact list
 // shown on the Customer panel's own Contacts tab.
+export interface SearchCustomerHit {
+  customer_id: number
+  name: string
+  tier: string
+  csm: string
+  prod_version: string | null
+  environments: string[]
+  match_field: 'name' | 'alias' | 'instance' | 'contact' | 'case'
+  match_text: string
+  score: number
+}
+
+export interface SearchCaseHit {
+  jira_ref: string
+  title: string
+  status: string
+  customer_id: number
+  customer_name: string | null
+  score: number
+}
+
+export interface SearchResult {
+  query: string
+  customers: SearchCustomerHit[]
+  cases: SearchCaseHit[]
+}
+
+export interface CustomerActivityItem {
+  kind: 'note' | 'comms' | 'case' | 'escalation' | 'upgrade' | 'automation' | 'training' | 'system'
+  when: string
+  title: string
+  detail: string | null
+  ref: string | null
+  actor: string | null
+  link: string | null       // in-app route, e.g. the comms campaign
+  note_id: number | null    // set on customer notes, for pin/unpin
+  is_sticky: boolean | null
+  flag: string | null       // short status pill, e.g. "follow-up needed"
+}
+
 export interface CustomerContactEntry {
   id: number
   email: string
@@ -687,9 +727,11 @@ export interface ReleaseComingNext {
 
 export interface ReleaseDefects {
   version: string
+  source: 'jira_live' | 'local_fallback'
   curated_defects_fixed: number | null
   live_defect_count: number
-  defects: { vms_ref: string; status: string; sprint_name: string | null; customers: string[] }[]
+  customer_reported_count: number
+  defects: { vms_ref: string; title: string | null; status: string; sprint_name: string | null; customers: string[] }[]
 }
 
 export interface PendingUpgradeBug {
@@ -986,6 +1028,109 @@ export interface Runbook {
   body: string
   created_at: string
   updated_at: string
+}
+
+export interface RunnerStatus {
+  enabled: boolean
+  reachable: boolean
+  error?: string
+  gitlab_token_set?: boolean
+  // ok: true = valid with api scope; false = proven bad; null = couldn't reach GitLab.
+  // Absent on an older runner that predates the check.
+  gitlab?: { set: boolean; ok: boolean | null; name?: string; scopes?: string[]; expires_at?: string | null; reason?: string | null }
+  sso?: { valid: boolean; identity: string | null; expires_at: string | null; error: string | null }
+}
+
+export interface RunnerInstance {
+  environment: string
+  subdomain: string
+  runner_env: string | null
+  region: string | null
+  current_version: string | null
+}
+
+export interface RunnerTargets {
+  customers: { customer_id: number; name: string; tier: string; instances: RunnerInstance[] }[]
+  other_environments: { runner_env: string; region: string; current_version: string | null; host: string | null }[]
+  runner_online: boolean
+  environments_cached?: boolean  // runner offline: environment list is the last known one
+}
+
+// How the Upgrade Runner knows a version is real — see automation.py's
+// _version_catalog().
+export type VersionBasis = 'releasenotes' | 'jira' | 'remembered' | 'manual'
+
+export interface VersionCheck {
+  version: string
+  accepted: boolean
+  basis: VersionBasis | null
+  source?: string
+  url: string | null
+  reason: string | null
+}
+
+export type StageState = 'pending' | 'active' | 'done' | 'failed' | 'unknown'
+export interface UpgradeProgress {
+  upgrade_run_id: number
+  environment: string | null
+  target_version: string | null
+  stages: Record<'ecr' | 'push' | 'build' | 'deploy' | 'postcheck', { state: StageState; detail: string }>
+  last_deploy_at: string | null
+  pipeline: {
+    ok: boolean; error?: string; pipeline_id?: number; web_url?: string; parent_status?: string
+    docker_status?: string | null; terraform_status?: string | null; child_pipeline_id?: number | null
+    build?: { status: string; started_at: string | null; finished_at: string | null; duration: number | null; web_url: string } | null
+    typical_build_seconds?: number | null
+  } | null
+}
+
+// One refresh of aws-util's ecs_deployment_monitor.sh --json.
+export interface DeploymentSnapshot {
+  ok: boolean
+  error?: string
+  checked_at: string
+  environment?: string
+  cluster?: string
+  service?: string
+  status?: string
+  running?: number
+  desired?: number
+  pending?: number
+  taskDefinition?: string
+  deployments?: { id: string; status: string; desired: number; running: number; pending: number; createdAt: string | number; taskDefinition: string }[]
+  tasks?: { taskId: string; lastStatus: string; healthStatus: string; createdAt: string | number; startedAt: string | number | null; stoppedReason: string | null }[]
+  stable?: boolean
+}
+
+export interface LiveInfo {
+  ok: boolean
+  url: string
+  latency_ms?: number
+  release?: string
+  environment?: string
+  error?: string
+}
+
+export interface AutomationRun {
+  id: number
+  kind: 'upgrade_environment' | 'ecr_tag_check' | 'ecs_force_deploy'
+  environment: string | null
+  from_version: string | null
+  target_version: string | null
+  dry_run: boolean
+  dry_run_of_id: number | null
+  customer_id: number | null
+  customer_name: string | null
+  // warning = the known post-push pipeline-watch crash (version pushed, finish with awsforcedeploy)
+  status: 'running' | 'succeeded' | 'warning' | 'failed' | 'cancelled' | 'lost'
+  exit_code: number | null
+  log_line_count: number
+  post_check_release: string | null
+  post_check_ok: boolean | null
+  post_checked_at: string | null
+  started_at: string
+  finished_at: string | null
+  lines?: string[]
 }
 
 export interface DevTeamMember {
@@ -2196,6 +2341,7 @@ export const api = {
     setNoteSticky: (id: number, noteId: number, isSticky: boolean) =>
       client.patch<CustomerNoteEntry>(`/customers/${id}/notes/${noteId}`, { is_sticky: isSticky }),
     contacts: (id: number) => client.get<CustomerContactEntry[]>(`/customers/${id}/contacts`),
+    activity: (id: number) => client.get<CustomerActivityItem[]>(`/customers/${id}/activity`),
     addContact: (id: number, email: string) => client.post<CustomerContactEntry>(`/customers/${id}/contacts`, { email }),
     deleteContact: (id: number, contactId: number) => client.delete(`/customers/${id}/contacts/${contactId}`),
     clearHypercare: (id: number) => client.post<Customer>(`/customers/${id}/clear-hypercare`, {}),
@@ -2279,6 +2425,7 @@ export const api = {
   upgrades: {
     list: (params?: Record<string, string | boolean>) => client.get<Upgrade[]>('/upgrades', { params }),
     pipeline: () => client.get('/upgrades/pipeline'),
+    pipelineJiraState: () => client.get<{ you: string; available: boolean; tickets: Record<string, { status: string; done: boolean; assignee: string | null; resolved_at: string | null }> }>('/upgrades/pipeline/jira-state'),
     patch: (id: number, data: Record<string, unknown>) => client.patch<Upgrade>(`/upgrades/${id}`, data),
     create: (data: Record<string, unknown>) => client.post<Upgrade>('/upgrades', data),
     syncFromJira: () => client.post<UpgradeSyncResult>('/upgrades/sync-from-jira', {}),
@@ -2357,6 +2504,28 @@ export const api = {
     dismiss: (id: number) => client.post<AiObservation>(`/ai-observations/${id}/dismiss`, {}),
     recompute: () => client.post<{ created: number }>('/ai-observations/recompute', {}),
   },
+
+  automation: {
+    status: () => client.get<RunnerStatus>('/automation/status'),
+    targets: () => client.get<RunnerTargets>('/automation/targets'),
+    versions: () => client.get<{ versions: { version: string; basis: VersionBasis }[]; latest: string | null; source: string }>('/automation/versions'),
+    checkVersion: (v: string) => client.get<VersionCheck>(`/automation/versions/${encodeURIComponent(v)}/check`),
+    verifyVersion: (v: string, note: string) => client.post<VersionCheck>(`/automation/versions/${encodeURIComponent(v)}/verify`, { note }),
+    setEnvHost: (name: string, host: string) => client.put<LiveInfo>(`/automation/environments/${encodeURIComponent(name)}/host`, { host }),
+    deployment: (name: string) => client.get<DeploymentSnapshot>(`/automation/environments/${encodeURIComponent(name)}/deployment`),
+    live: (name: string) => client.get<LiveInfo>(`/automation/environments/${encodeURIComponent(name)}/live`),
+    ssoLogin: () => client.post<{ message: string; runner_job_id: string }>('/automation/sso-login', {}),
+    ssoLoginProgress: (jobId: string) => client.get<{ status: string; url: string | null; code: string | null; error: string | null }>(`/automation/sso-login/${jobId}`),
+    runs: () => client.get<AutomationRun[]>('/automation/runs'),
+    start: (data: { kind: string; environment?: string; version?: string; dry_run?: boolean; dry_run_of_id?: number; confirm_environment?: string; follows_run_id?: number }) =>
+      client.post<AutomationRun>('/automation/runs', data),
+    get: (id: number, since = 0) => client.get<AutomationRun>(`/automation/runs/${id}`, { params: { since } }),
+    cancel: (id: number) => client.post<AutomationRun>(`/automation/runs/${id}/cancel`, {}),
+    progress: (id: number) => client.get<UpgradeProgress>(`/automation/runs/${id}/progress`),
+    postCheck: (id: number) => client.post<AutomationRun & { probe: LiveInfo }>(`/automation/runs/${id}/post-check`, {}),
+  },
+
+  search: (q: string, limit = 12) => client.get<SearchResult>('/search', { params: { q, limit } }),
 
   teams: {
     list: () => client.get<TeamsRouting>('/teams'),

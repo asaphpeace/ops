@@ -33,3 +33,5 @@ backend/alembic/versions/*.pyc
 # OS
 .DS_Store
 Thumbs.db
+runner/runner.env
+runner/logs/

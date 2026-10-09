@@ -3,7 +3,7 @@
     <div class="sh">
       <div>
         <h2>Operations</h2>
-        <p>Migrations · Upgrades · SSO across the estate</p>
+        <p>Upgrades · Upgrade Runner · Migrations · SSO across the estate</p>
       </div>
     </div>
 
@@ -284,8 +284,8 @@
       <!-- Superseded upgrades — active row whose target version is already met by a different, completed row for the same customer+environment. Detection only, never auto-cancels -->
       <div class="tw" style="padding:15px 17px;margin-bottom:16px">
         <div class="jm-head" style="margin-bottom:0">
-          <span class="lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:800">
-            🔁 Superseded Upgrades
+          <span class="lbl pl-toggle" style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:800" @click="toggleSupersededCollapsed">
+            <span class="pl-caret">{{ supersededCollapsed ? '▸' : '▾' }}</span> 🔁 Superseded Upgrades
           </span>
           <span v-if="supersededChecked" style="font-size:10px;color:var(--text3)">
             {{ supersededUpgrades.length ? `${supersededUpgrades.length} row(s) superseded` : 'None found' }}
@@ -294,7 +294,7 @@
             {{ checkingSuperseded ? 'Checking…' : '↻ Check now' }}
           </button>
         </div>
-        <div v-if="supersededUpgrades.length" class="jm-list" style="margin-top:11px">
+        <div v-if="supersededUpgrades.length && !supersededCollapsed" class="jm-list" style="margin-top:11px">
           <div v-for="s in supersededUpgrades" :key="s.id" class="jm-card">
             <div class="jm-head">
               <span style="font-weight:700;color:var(--text)">{{ s.customer_name }}</span>
@@ -314,6 +314,38 @@
                 {{ cancellingSuperseded.has(s.id) ? 'Cancelling…' : '⊘ Cancel this upgrade' }}
               </button>
               <button class="btn btn-sm btn-g" @click="dismissSuperseded(s.id)">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resolved in Jira — board rows whose ticket is already resolved. Detection only: nothing changes without a click -->
+      <div v-if="resolvedOnBoard.length" class="tw" style="padding:15px 17px;margin-bottom:16px">
+        <div class="jm-head" style="margin-bottom:0">
+          <span class="lbl pl-toggle" style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);font-weight:800" @click="toggleResolvedCollapsed">
+            <span class="pl-caret">{{ resolvedCollapsed ? '▸' : '▾' }}</span> ✅ Resolved in Jira, still on the board
+          </span>
+          <span style="font-size:10px;color:var(--amber)">{{ resolvedOnBoard.length }} ticket{{ resolvedOnBoard.length === 1 ? '' : 's' }} to tidy up</span>
+        </div>
+        <div v-if="!resolvedCollapsed" class="jm-list" style="margin-top:11px">
+          <div v-for="u in resolvedOnBoard" :key="u.id" class="jm-card">
+            <div class="jm-head">
+              <span style="font-weight:700;color:var(--text)">{{ u.customer_name }}</span>
+              <span v-if="u.customer_tier" :class="['tier-badge', tierClass(u.customer_tier)]">{{ u.customer_tier }}</span>
+              <a class="jp" :href="jiraUrl(u.jira_ref)" target="_blank" rel="noopener">{{ u.jira_ref }}</a>
+              <span :class="['env-badge', envClass(u.environment)]">{{ u.environment }}</span>
+              <span style="margin-left:auto;font-size:9px;color:var(--text3)">{{ u.stage }} here</span>
+            </div>
+            <div style="font-size:10.5px;color:var(--text2);margin:6px 0">
+              Jira says <b style="color:var(--green)">{{ jiraState!.tickets[u.jira_ref].status }}</b>
+              <template v-if="jiraState!.tickets[u.jira_ref].resolved_at">on {{ new Date(jiraState!.tickets[u.jira_ref].resolved_at!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }}</template>
+              — still <b style="color:var(--text)">{{ u.stage }}</b> on the board for {{ u.from_version || '?' }} → {{ u.to_version }}.
+              Was the upgrade done, or not needed?
+            </div>
+            <div class="jm-actions">
+              <button class="btn btn-sm btn-green" :disabled="tidying.has(u.id)" @click="markResolvedDone(u)">✓ Upgrade was done</button>
+              <button class="btn btn-sm btn-g" :disabled="tidying.has(u.id)" @click="cancelResolved(u)">⊘ Not needed — cancel</button>
+              <button class="btn btn-sm btn-g" @click="dismissedResolved.add(u.id)">Dismiss</button>
             </div>
           </div>
         </div>
@@ -355,8 +387,22 @@
       </div>
 
       <div class="sh" style="margin-top:0">
-        <div><h2>Upgrade Pipeline</h2><p>Customer-first · all stages</p></div>
+        <div class="pl-title" @click="togglePipelineCollapsed">
+          <span class="pl-caret">{{ pipelineCollapsed ? '▸' : '▾' }}</span>
+          <div><h2>Upgrade Pipeline</h2><p>Customer-first · all stages</p></div>
+        </div>
         <button class="btn" @click="toggleUpgForm">{{ showUpgForm ? '✕ Cancel' : '+ New Upgrade' }}</button>
+      </div>
+      <div class="pl-scope">
+        <button class="pl-chip" :class="{ active: pipelineScope === 'mine' }" @click="setPipelineScope('mine')">
+          My open upgrade tickets <b>{{ boardCounts.mine }}</b>
+        </button>
+        <button class="pl-chip" :class="{ active: pipelineScope === 'all' }" @click="setPipelineScope('all')">
+          Everything on the board <b>{{ boardCounts.all }}</b>
+        </button>
+        <span v-if="!jiraState" class="pl-note">Checking Jira…</span>
+        <span v-else-if="!jiraState.available" class="pl-note pl-warn">Live Jira check unavailable — showing everything.</span>
+        <span v-else-if="pipelineScope === 'mine' && hiddenSummary" class="pl-note">{{ hiddenSummary }}</span>
       </div>
 
       <div v-if="showUpgForm" style="background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:14px 16px;margin-bottom:14px">
@@ -413,7 +459,7 @@
         </div>
       </div>
 
-      <KanbanBoard v-if="pipeline" :stages="upgradeActiveStages" :items-by-stage="upgradesGroupedByStage" grid-class="pb-5">
+      <KanbanBoard v-if="pipeline && !pipelineCollapsed" :stages="upgradeActiveStages" :items-by-stage="upgradesGroupedByStage" grid-class="pb-5">
         <template #card="{ item: grp, stage }">
           <div class="uc-group">
             <div class="uc-group-head">
@@ -659,6 +705,9 @@
     </template>
 
     <!-- SSO -->
+    <!-- Upgrade Runner — runs aws-util's upgrade_environment.sh via the host runner -->
+    <UpgradeRunnerView v-if="activeTab === 'runner'" embedded />
+
     <template v-if="activeTab === 'sso'">
       <div v-if="ssoStats" class="stats-row sr-4">
         <div class="sc"><div class="lbl">Configured</div><div class="val">{{ ssoStats.total }}</div></div>
@@ -825,21 +874,24 @@ import { useCaseDrill } from '@/composables/useCaseDrill'
 import { useCustomerDrill } from '@/composables/useCustomerDrill'
 import { useBugDrill } from '@/composables/useBugDrill'
 import KanbanBoard from '@/components/KanbanBoard.vue'
+import UpgradeRunnerView from '@/views/UpgradeRunnerView.vue'
 
 const { openCase } = useCaseDrill()
 const { openBug } = useBugDrill()
 const { openCustomer: goToCustomer } = useCustomerDrill()
 
+// Upgrades first — it's the day-to-day work here; Migrations is occasional.
 const tabs = [
-  { id: 'migrations', label: 'Migrations' },
   { id: 'upgrades', label: 'Upgrades' },
+  { id: 'runner', label: 'Upgrade Runner' },
+  { id: 'migrations', label: 'Migrations' },
   { id: 'sso', label: 'SSO' },
   { id: 'cancellations', label: 'Cancellations' },
 ]
 const route = useRoute()
-const _validTabs = ['migrations', 'upgrades', 'sso', 'cancellations'] as const
-const _initialTab = _validTabs.includes(route.query.tab as any) ? (route.query.tab as typeof _validTabs[number]) : 'migrations'
-const activeTab = ref<'migrations' | 'upgrades' | 'sso' | 'cancellations'>(_initialTab)
+const _validTabs = ['upgrades', 'runner', 'migrations', 'sso', 'cancellations'] as const
+const _initialTab = _validTabs.includes(route.query.tab as any) ? (route.query.tab as typeof _validTabs[number]) : 'upgrades'
+const activeTab = ref<typeof _validTabs[number]>(_initialTab)
 
 const migStages = ['Not Started', 'Assessed', 'DevOps Priority', 'Cust. Contacted', 'Downtime Agreed', 'In Progress', 'Verifying', 'Complete']
 
@@ -962,12 +1014,58 @@ function dismissSuperseded(id: number) {
   supersededUpgrades.value = supersededUpgrades.value.filter(r => r.id !== id)
 }
 
+// Superseded is detection-only background info — collapsed by default so
+// it doesn't push the board down; the header still shows the count.
+const supersededCollapsed = ref(readPref('ops.supersededCollapsed', '1') === '1')
+function toggleSupersededCollapsed() {
+  supersededCollapsed.value = !supersededCollapsed.value
+  writePref('ops.supersededCollapsed', supersededCollapsed.value ? '1' : '0')
+}
+
+// Board rows whose Jira ticket is already resolved (live, from
+// /upgrades/pipeline/jira-state). Rows are never re-synced after creation,
+// so these linger as "Requested" — offered for a one-click tidy-up, never
+// changed automatically.
+const resolvedCollapsed = ref(readPref('ops.resolvedCollapsed', '0') === '1')
+function toggleResolvedCollapsed() {
+  resolvedCollapsed.value = !resolvedCollapsed.value
+  writePref('ops.resolvedCollapsed', resolvedCollapsed.value ? '1' : '0')
+}
+const dismissedResolved = reactive(new Set<number>())
+const tidying = reactive(new Set<number>())
+const resolvedOnBoard = computed(() =>
+  jiraState.value?.available
+    ? activeBoardRows.value.filter(u => u.jira_ref && jiraState.value!.tickets[u.jira_ref]?.done && !dismissedResolved.has(u.id))
+    : []
+)
+async function markResolvedDone(u: any) {
+  tidying.add(u.id)
+  try {
+    // Jira's resolution date is the best record of when it was actually done.
+    const when = jiraState.value?.tickets[u.jira_ref]?.resolved_at ?? undefined
+    await api.upgrades.patch(u.id, { stage: 'Verified Done', ...(when ? { date_done: when, verified_at: when } : {}) })
+    await loadUpgradesPipeline()
+  } finally {
+    tidying.delete(u.id)
+  }
+}
+async function cancelResolved(u: any) {
+  tidying.add(u.id)
+  try {
+    await api.upgrades.patch(u.id, { stage: 'Cancelled' })
+    await loadUpgradesPipeline()
+  } finally {
+    tidying.delete(u.id)
+  }
+}
+
 async function loadUpgradesPipeline() {
   const [pipeRes, upgRes] = await Promise.all([
     api.upgrades.pipeline(),
     api.upgrades.list(),
   ])
   pipeline.value = pipeRes.data
+  loadJiraState()
   allUpgrades.value = upgRes.data
 }
 
@@ -977,6 +1075,7 @@ async function syncUpgradesFromJira() {
     const res = await api.upgrades.syncFromJira()
     syncResult.value = res.data
     pipeline.value = (await api.upgrades.pipeline()).data
+    loadJiraState()
     await loadUnmatchedCustomers()
   } finally {
     syncingUpgrades.value = false
@@ -1193,12 +1292,71 @@ const blockedUpgrades = computed(() => {
 
 interface UpgradeGroup { customer_id: number; customer_name: string; customer_tier: string; items: any[] }
 
+// ── Board scope: "My open upgrade tickets" ──
+// Every board row is already an "Upgrade or Installation Request" (the
+// backend filters on that). Rows are created once from a ticket though, and
+// were never re-checked — so tickets resolved or reassigned in Jira kept
+// cluttering the board. "Mine" = still open in Jira AND assigned to you,
+// checked live (GET /upgrades/pipeline/jira-state, cached 5 min).
+type JiraState = Awaited<ReturnType<typeof api.upgrades.pipelineJiraState>>['data']
+const jiraState = ref<JiraState | null>(null)
+function readPref(key: string, fallback: string) {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+function writePref(key: string, value: string) {
+  try { localStorage.setItem(key, value) } catch { /* private mode etc. */ }
+}
+const pipelineScope = ref<'mine' | 'all'>(readPref('ops.pipelineScope', 'mine') === 'all' ? 'all' : 'mine')
+const pipelineCollapsed = ref(readPref('ops.pipelineCollapsed', '0') === '1')
+function setPipelineScope(s: 'mine' | 'all') { pipelineScope.value = s; writePref('ops.pipelineScope', s) }
+function togglePipelineCollapsed() {
+  pipelineCollapsed.value = !pipelineCollapsed.value
+  writePref('ops.pipelineCollapsed', pipelineCollapsed.value ? '1' : '0')
+}
+function isMyOpenTicket(u: any) {
+  const t = u.jira_ref ? jiraState.value?.tickets[u.jira_ref] : undefined
+  return !!t && !t.done && t.assignee === jiraState.value!.you
+}
+// Without a live answer from Jira the board shows everything rather than
+// silently hiding work.
+const scopeActive = computed(() => pipelineScope.value === 'mine' && !!jiraState.value?.available)
+const activeBoardRows = computed(() =>
+  pipeline.value ? upgradeActiveStages.flatMap(s => pipeline.value.stages[s] ?? []) : []
+)
+const boardCounts = computed(() => ({
+  all: activeBoardRows.value.length,
+  mine: jiraState.value?.available ? activeBoardRows.value.filter(isMyOpenTicket).length : activeBoardRows.value.length,
+}))
+const hiddenSummary = computed(() => {
+  if (!jiraState.value?.available) return ''
+  const hidden = activeBoardRows.value.filter(u => !isMyOpenTicket(u))
+  if (!hidden.length) return ''
+  const resolved = hidden.filter(u => jiraState.value!.tickets[u.jira_ref]?.done).length
+  const others = new Map<string, number>()
+  for (const u of hidden) {
+    const t = jiraState.value!.tickets[u.jira_ref]
+    if (t && !t.done) others.set(t.assignee ?? 'unassigned', (others.get(t.assignee ?? 'unassigned') ?? 0) + 1)
+  }
+  const notFound = hidden.filter(u => !jiraState.value!.tickets[u.jira_ref]).length
+  const parts = [
+    resolved && `${resolved} resolved in Jira`,
+    ...[...others].map(([who, n]) => `${n} assigned to ${who}`),
+    notFound && `${notFound} not found in Jira`,
+  ].filter(Boolean)
+  return `${hidden.length} hidden — ${parts.join(', ')}`
+})
+async function loadJiraState() {
+  try { jiraState.value = (await api.upgrades.pipelineJiraState()).data }
+  catch { jiraState.value = { you: '', available: false, tickets: {} } }
+}
+
 const upgradesGroupedByStage = computed((): Record<string, UpgradeGroup[]> => {
   const out: Record<string, UpgradeGroup[]> = {}
   if (!pipeline.value) return out
   for (const stage of upgradeActiveStages) {
     const byCustomer = new Map<number, UpgradeGroup>()
     for (const u of pipeline.value.stages[stage] ?? []) {
+      if (scopeActive.value && !isMyOpenTicket(u)) continue
       if (!byCustomer.has(u.customer_id)) {
         byCustomer.set(u.customer_id, { customer_id: u.customer_id, customer_name: u.customer_name, customer_tier: u.customer_tier, items: [] })
       }
@@ -1508,7 +1666,7 @@ async function loadCancellations() {
 onMounted(async () => {
   await Promise.all([
     loadMigrations(),
-    api.upgrades.pipeline().then(r => { pipeline.value = r.data }),
+    api.upgrades.pipeline().then(r => { pipeline.value = r.data; loadJiraState() }),
     api.upgrades.list().then(r => { allUpgrades.value = r.data }),
     api.sso.list().then(r => { ssoRecords.value = r.data }),
     api.sso.stats().then(r => { ssoStats.value = r.data }),
@@ -1750,4 +1908,13 @@ async function initiateMigration(r: { id: number }) {
 .history-modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; padding: 18px 20px; width: 420px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
 .history-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .history-modal-body { display: flex; flex-direction: column; }
+.pl-title { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.pl-toggle { cursor: pointer; user-select: none; }
+.pl-caret { font-size: 12px; color: var(--text3); width: 12px; }
+.pl-scope { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: -6px 0 14px; }
+.pl-chip { font-size: 10.5px; font-weight: 700; color: var(--text2); background: var(--surface2); border: 1px solid var(--border2); border-radius: 12px; padding: 4px 11px; cursor: pointer; }
+.pl-chip b { margin-left: 4px; }
+.pl-chip.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.pl-note { font-size: 10.5px; color: var(--text3); margin-left: 4px; }
+.pl-warn { color: var(--amber); }
 </style>

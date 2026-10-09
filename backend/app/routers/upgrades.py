@@ -504,3 +504,64 @@ async def approve_suggestion(upgrade_id: int, db: AsyncSession = Depends(get_db)
     await db.refresh(u)
     pairs = await _self_service_pairs(db, {u.customer_id})
     return UpgradeOut(**_enrich(u, pairs))
+
+
+# ── Live Jira state for the pipeline board ───────────────────────────────
+# The board shows every active "Upgrade or Installation Request" row, but
+# rows are created once from a ticket and the local Case cache doesn't hold
+# most sys-admin tickets — so a ticket resolved or reassigned in Jira kept
+# sitting on the board (confirmed live: DSD-32219 resolved, still
+# "Requested"). The board's "My open upgrade tickets" view filters on this
+# live state instead: still open in Jira AND assigned to YOU.
+_JIRA_STATE_TTL = 300
+_jira_state_cache: dict = {"refs": None, "at": 0.0, "data": None}
+
+
+@router.get("/pipeline/jira-state")
+async def pipeline_jira_state(db: AsyncSession = Depends(get_db)):
+    import time
+
+    import httpx
+
+    from app.routers.desk import YOU
+    from app.services.jira import _HEADERS, _auth
+
+    rows = (await db.execute(
+        select(Upgrade.jira_ref).where(
+            Upgrade.stage.notin_(("Verified Done", "Cancelled")),
+            Upgrade.jira_ref.is_not(None),
+            Upgrade.request_type == _SYS_ADMIN_REQUEST_TYPE,
+        )
+    )).scalars().all()
+    refs = sorted(set(rows))
+    if not settings.jira_enabled or not refs:
+        return {"you": YOU, "available": settings.jira_enabled, "tickets": {}}
+
+    cache = _jira_state_cache
+    if cache["refs"] == refs and time.time() - cache["at"] < _JIRA_STATE_TTL:
+        return {"you": YOU, "available": True, "tickets": cache["data"]}
+
+    tickets: dict[str, dict] = {}
+    try:
+        async with httpx.AsyncClient(auth=_auth(), timeout=30, follow_redirects=True) as client:
+            for i in range(0, len(refs), 100):
+                chunk = refs[i:i + 100]
+                resp = await client.get(
+                    f"{settings.jira_base_url.rstrip('/')}/rest/api/3/search/jql", headers=_HEADERS,
+                    params={"jql": f"key in ({','.join(chunk)})", "fields": "status,assignee,resolutiondate", "maxResults": 100},
+                )
+                resp.raise_for_status()
+                for issue in resp.json().get("issues", []):
+                    f = issue["fields"]
+                    tickets[issue["key"]] = {
+                        "status": f["status"]["name"],
+                        "done": f["status"]["statusCategory"]["key"] == "done",
+                        "assignee": (f.get("assignee") or {}).get("displayName"),
+                        "resolved_at": f.get("resolutiondate"),
+                    }
+    except httpx.HTTPError:
+        # Board falls back to showing everything, and says why.
+        return {"you": YOU, "available": False, "tickets": {}}
+
+    cache.update(refs=refs, at=time.time(), data=tickets)
+    return {"you": YOU, "available": True, "tickets": tickets}

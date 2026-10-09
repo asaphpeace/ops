@@ -43,6 +43,9 @@ from app.models.log_entry import LogEntry  # noqa: F401
 from app.models.engineering_snapshot import EngineeringDailySnapshot  # noqa: F401
 from app.models.runbook import Runbook  # noqa: F401
 from app.models.dev_team import DevTeam, DevTeamMember, VmsModule  # noqa: F401
+from app.models.automation_run import AutomationRun  # noqa: F401
+from app.models.verified_version import VerifiedVersion  # noqa: F401
+from app.models.runner_env_host import RunnerEnvHost  # noqa: F401
 
 config = context.config
 

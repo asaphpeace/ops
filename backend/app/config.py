@@ -143,6 +143,16 @@ class Settings(BaseSettings):
     def dataloy_vms_enabled(self) -> bool:
         return bool(self.dataloy_vms_token_url and self.dataloy_vms_api_base_url)
 
+    # Host runner (runner/sedna_runner.py) — runs whitelisted aws-util scripts
+    # on the Docker host, where the AWS SSO session, GitLab credentials and
+    # ~/environments repos live. Empty = Upgrade Runner disabled.
+    runner_url: str = ""               # e.g. "http://host.docker.internal:8765"
+    runner_token: str = ""
+
+    @property
+    def runner_enabled(self) -> bool:
+        return bool(self.runner_url and self.runner_token)
+
     @property
     def rovo_enabled(self) -> bool:
         return bool(self.rovo_api_email and self.rovo_api_token)
