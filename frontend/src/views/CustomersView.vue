@@ -103,7 +103,7 @@
 
     <div class="tw">
       <div class="ttb">
-        <input class="inp" style="width:190px" placeholder="Search customers..." v-model="search">
+        <input class="inp" style="width:260px" placeholder="Search name, instance, contact, case…" v-model="search">
         <select class="sel" v-model="filterTier">
           <option value="">All tiers</option>
           <option>Premier</option>
@@ -145,7 +145,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in sorted" :key="c.id" class="cust-row" @click="openCustomer(c.id)">
+          <tr v-for="c in sorted" :key="c.id" class="cust-row" @click="openProfile(c.id, $event)">
             <td>
               <div class="hc-mini">
                 <div :class="['health-dot', healthDot(c.health_score)]"></div>
@@ -153,13 +153,16 @@
               </div>
             </td>
             <td class="td-name">
-              {{ c.name }}
+              <span v-html="markSearch(c.name)"></span>
               <span v-if="c.jvm_client" class="jvm-badge" title="Still on the old Java desktop client, not the web app">JVM</span>
               <span
                 v-if="engagementTier(c.last_case_activity_at)"
                 :class="['dormant-badge', engagementTier(c.last_case_activity_at)]"
                 :title="c.last_case_activity_at ? `Last case: ${formatRenewal(c.last_case_activity_at)}` : 'No case on record'"
               >{{ engagementTier(c.last_case_activity_at) === 'dormant' ? 'Dormant' : 'Quiet' }}</span>
+              <div v-if="searchHits?.get(c.id) && searchHits.get(c.id)!.match_field !== 'name'" class="cust-why">
+                {{ searchHits.get(c.id)!.match_field }}: <span v-html="markSearch(searchHits.get(c.id)!.match_text)"></span>
+              </div>
             </td>
             <td><span :class="['tier-badge', tierClass(c.tier)]">{{ c.tier }}</span></td>
             <td>{{ c.csm }}</td>
@@ -191,8 +194,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { api, planName, engagementTier, type Customer, type CustomerStats, type Upgrade, type MigrationProject } from '@/api/client'
-import { useCustomerDrill } from '@/composables/useCustomerDrill'
+import { api, planName, engagementTier, type Customer, type CustomerStats, type Upgrade, type MigrationProject, type SearchCustomerHit } from '@/api/client'
+import { useRouter } from 'vue-router'
 import TenantDiscoveryModal from '@/components/TenantDiscoveryModal.vue'
 import CustomerExportModal from '@/components/CustomerExportModal.vue'
 
@@ -210,7 +213,6 @@ watch(showExport, (open) => {
   }
 })
 
-const { openCustomer } = useCustomerDrill()
 
 const customers = ref<Customer[]>([])
 // Real, live-Jira open-case count per customer_id — replaced the old
@@ -222,6 +224,37 @@ const stats = ref<CustomerStats | null>(null)
 const loading = ref(true)
 
 const search = ref('')
+// Same ranked search as the top-bar global search (name, aliases, instance
+// subdomains, contact emails, cases) — the table filters to those hits and,
+// when the hit wasn't on the name, says what matched.
+const searchHits = ref<Map<number, SearchCustomerHit> | null>(null)
+let searchTimer: number | undefined
+let searchSeq = 0
+watch(search, (q) => {
+  clearTimeout(searchTimer)
+  if (q.trim().length < 2) { searchHits.value = null; return }
+  searchTimer = window.setTimeout(async () => {
+    const mine = ++searchSeq
+    const res = (await api.search(q.trim(), 100)).data
+    if (mine === searchSeq) searchHits.value = new Map(res.customers.map(h => [h.customer_id, h]))
+  }, 140)
+})
+function escapeHtml(t: string) {
+  return t.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]!))
+}
+function markSearch(text: string) {
+  const q = search.value.trim()
+  const safe = escapeHtml(text)
+  if (q.length < 2) return safe
+  const re = new RegExp(escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  return safe.replace(re, m => `<mark class="cust-mark">${m}</mark>`)
+}
+const router = useRouter()
+// Click → full-page profile; Cmd/Ctrl-click → profile in a new tab.
+function openProfile(id: number, e: MouseEvent) {
+  if (e.metaKey || e.ctrlKey) window.open(`/customers/${id}`, '_blank')
+  else router.push(`/customers/${id}`)
+}
 const filterTier = ref('')
 const filterCsm = ref('')
 const filterInfra = ref('')
@@ -286,7 +319,10 @@ const csms = computed(() => [...new Set(customers.value.map(c => c.csm))].sort()
 
 const filtered = computed(() =>
   customers.value.filter(c => {
-    if (search.value && !c.name.toLowerCase().includes(search.value.toLowerCase())) return false
+    if (search.value.trim()) {
+      if (searchHits.value) { if (!searchHits.value.has(c.id)) return false }
+      else if (!c.name.toLowerCase().includes(search.value.trim().toLowerCase())) return false  // until results arrive
+    }
     if (filterTier.value && c.tier !== filterTier.value) return false
     if (filterCsm.value && c.csm !== filterCsm.value) return false
     if (filterInfra.value && c.infra !== filterInfra.value) return false
@@ -514,4 +550,6 @@ function daysSinceColor(days: number | null) {
 
 <style scoped>
 .cust-row { cursor: pointer; }
+.cust-why { font-size: 9.5px; font-weight: 500; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:deep(.cust-mark) { background: rgba(59, 127, 245, .28); color: var(--text); border-radius: 2px; padding: 0 1px; }
 </style>

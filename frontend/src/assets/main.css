@@ -133,7 +133,7 @@ body {
 .nb-divider { width: 24px; height: 1px; background: var(--border); margin: 6px 0; }
 
 /* ── MAIN ───────────────────────────────────────────────── */
-.main { margin-left: 52px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+.main { margin-left: 52px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }  /* min-width:0 — a wide table must not stretch the page (and push the top bar off-screen) */
 
 /* ── TOPBAR ─────────────────────────────────────────────── */
 .topbar {
@@ -151,6 +151,9 @@ body {
 .topbar-title  { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
 .topbar-sub    { font-size: 10px; color: var(--text3); margin-top: 1px; }
 .topbar-right  { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* Global search lives in the top bar too — on narrower windows the status
+   pills give way first so the page title and search keep their room. */
+@media (max-width: 1200px) { .topbar-right .spill { display: none; } }
 .spill {
   background: var(--surface2);
   border: 1px solid var(--border);

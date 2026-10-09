@@ -24,6 +24,7 @@ const router = createRouter({
     { path: '/support-signals',  component: () => import('@/views/SupportSignalsView.vue') },
     { path: '/customers',        component: () => import('@/views/CustomersHubView.vue') },
     { path: '/customers/comms',  component: () => import('@/views/CustomerCommsView.vue') },
+    { path: '/customers/:id(\\d+)', component: () => import('@/views/CustomerProfileView.vue') },
     { path: '/releases',         component: () => import('@/views/ReleasesView.vue') },
     { path: '/engineering',      component: () => import('@/views/EngineeringHubView.vue') },
     { path: '/tools',            component: () => import('@/views/ToolsHubView.vue') },

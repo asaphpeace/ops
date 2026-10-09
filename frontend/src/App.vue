@@ -60,6 +60,7 @@
         <div class="topbar-sub">Your L2 operational hub · {{ today }}</div>
       </div>
       <div class="topbar-right">
+        <GlobalSearch />
         <div class="spill" v-if="triage">
           <div class="dot" style="background:var(--red)"></div>{{ triage.sla_breaching }} SLA breaching
         </div>
@@ -84,7 +85,6 @@
   </div>
 
   <CaseDrillPanel />
-  <CustomerDrillPanel />
   <BugDrillPanel />
   <EngineeringEntityPanel />
   <ToastHost />
@@ -95,7 +95,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, type TriageStats } from '@/api/client'
 import CaseDrillPanel from '@/components/CaseDrillPanel.vue'
-import CustomerDrillPanel from '@/components/CustomerDrillPanel.vue'
+import GlobalSearch from '@/components/GlobalSearch.vue'
 import BugDrillPanel from '@/components/BugDrillPanel.vue'
 import EngineeringEntityPanel from '@/components/EngineeringEntityPanel.vue'
 import ToastHost from '@/components/ToastHost.vue'
@@ -148,6 +148,8 @@ const tabTitles: Record<string, Record<string, string>> = {
     ollama: 'Ollama',
     troubleshoot: 'Troubleshoot',
     knowledge: 'Knowledge',
+    teams: 'Teams & Routing',
+    'audit-log': 'Audit Log',
   },
   '/engineering': {
     overview: 'Engineering Overview',
@@ -165,6 +167,7 @@ const tabTitles: Record<string, Record<string, string>> = {
 const currentTitle = computed(() => {
   const tab = (route.query.tab as string | undefined) ?? defaultTabs[route.path]
   if (tab && tabTitles[route.path]?.[tab]) return tabTitles[route.path][tab]
+  if (/^\/customers\/\d+$/.test(route.path)) return 'Customer Profile'
   return titles[route.path] ?? 'Sedna Ops'
 })
 
