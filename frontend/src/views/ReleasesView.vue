@@ -56,9 +56,17 @@
 
     <div style="display:grid;grid-template-columns:320px 1fr;gap:16px">
       <div>
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px">Recent Releases</div>
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px">Releases · newest version first</div>
         <div v-if="loading" style="color:var(--text3);font-size:11px">Loading…</div>
-        <div v-for="r in releases" :key="r.id" class="ric ric-click" @click="toggleDefects(r.version)">
+        <template v-for="g in releaseGroups" :key="g.line">
+        <div class="rg-head" :class="{ open: openLines.has(g.line) }" @click="toggleLine(g.line)">
+          <span class="rg-caret">{{ openLines.has(g.line) ? '▾' : '▸' }}</span>
+          <span class="rg-line">{{ g.line }}</span>
+          <span class="rg-meta">latest {{ g.releases[0].version.replace(/-R$/, '') }} · {{ g.releases.length }} release{{ g.releases.length === 1 ? '' : 's' }}</span>
+          <span v-if="g.releases.some(r => r.is_latest)" class="type-badge type-s rg-badge">Current latest</span>
+        </div>
+        <template v-if="openLines.has(g.line)">
+        <div v-for="r in g.releases" :key="r.id" class="ric ric-click rg-item" @click="toggleDefects(r.version)">
           <div class="ri-ver">{{ r.version }} <span class="ri-toggle">{{ expandedVersion === r.version ? '▾' : '▸' }}</span></div>
           <div class="ri-meta">
             Released {{ formatDate(r.released_at) }}
@@ -79,10 +87,15 @@
           <div v-if="expandedVersion === r.version" class="ri-defects" @click.stop>
             <div v-if="defectsLoading" class="sub" style="color:var(--text3);font-size:10.5px">Loading real defects…</div>
             <template v-else-if="defectsByVersion[r.version]">
-              <div v-if="!defectsByVersion[r.version]!.defects.length" class="sub" style="color:var(--text3);font-size:10.5px">No linked VMS defects for this version.</div>
+              <div v-if="defectsByVersion[r.version]!.source === 'local_fallback'" class="sub" style="color:var(--amber);font-size:10px;margin-bottom:4px">⚠ Jira unreachable — showing only bugs linked from customer cases.</div>
+              <div v-else-if="defectsByVersion[r.version]!.defects.length" class="sub" style="color:var(--text3);font-size:10px;margin-bottom:4px">
+                {{ defectsByVersion[r.version]!.live_defect_count }} bug{{ defectsByVersion[r.version]!.live_defect_count === 1 ? '' : 's' }} fixed · {{ defectsByVersion[r.version]!.customer_reported_count }} hit by customers
+              </div>
+              <div v-if="!defectsByVersion[r.version]!.defects.length" class="sub" style="color:var(--text3);font-size:10.5px">No VMS bugs carry this fix version in Jira.</div>
               <div v-for="d in defectsByVersion[r.version]!.defects" :key="d.vms_ref" class="ri-defect-row">
                 <span class="jref" @click="openBug(d.vms_ref)">{{ d.vms_ref }}</span>
                 <span class="ri-defect-status">{{ d.status }}</span>
+                <span v-if="d.title" class="ri-defect-title">{{ d.title }}</span>
                 <span v-if="d.sprint_name" class="ri-defect-sprint">🏃 {{ d.sprint_name }}</span>
                 <span v-if="d.customers.length > 1" class="ri-defect-multi">{{ d.customers.length }} customers hit this</span>
                 <span class="ri-defect-customers">{{ d.customers.join(', ') || 'No linked customers' }}</span>
@@ -90,6 +103,8 @@
             </template>
           </div>
         </div>
+        </template>
+        </template>
 
         <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin:20px 0 10px">Coming Next</div>
         <div v-if="comingNextLoading" style="color:var(--text3);font-size:11px">Loading…</div>
@@ -389,6 +404,42 @@ const defectCases = ref<Case[]>([])
 const loading = ref(true)
 
 const expandedVersion = ref<string | null>(null)
+
+// Releases grouped by master line (8.32, 8.31, …), newest version first.
+// The API orders by release *date*, which interleaves lines because older
+// lines keep getting patches (e.g. 8.24.6 shipped after 8.32) — so the
+// order here is by real element-wise version, never parseFloat.
+function versionParts(v: string) {
+  return (v.match(/\d+/g) ?? []).map(Number)
+}
+function compareVersionsDesc(a: string, b: string) {
+  const x = versionParts(a), y = versionParts(b)
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (y[i] ?? 0) - (x[i] ?? 0)
+    if (d) return d
+  }
+  return 0
+}
+const releaseGroups = computed(() => {
+  const groups = new Map<string, Release[]>()
+  for (const r of releases.value) {
+    const [maj, min] = versionParts(r.version)
+    const line = min === undefined ? String(maj) : `${maj}.${min}`
+    groups.set(line, [...(groups.get(line) ?? []), r])
+  }
+  return [...groups.entries()]
+    .map(([line, rs]) => ({ line, releases: rs.sort((a, b) => compareVersionsDesc(a.version, b.version)) }))
+    .sort((a, b) => compareVersionsDesc(a.line, b.line))
+})
+// Newest line open by default; the rest collapsed.
+const openLines = ref(new Set<string>())
+watch(releaseGroups, (gs) => { if (!openLines.value.size && gs.length) openLines.value = new Set([gs[0].line]) })
+function toggleLine(line: string) {
+  const next = new Set(openLines.value)
+  if (next.has(line)) next.delete(line)
+  else next.add(line)
+  openLines.value = next
+}
 const defectsLoading = ref(false)
 const defectsByVersion = ref<Record<string, ReleaseDefects>>({})
 
@@ -664,6 +715,14 @@ function tierClass(tier: string) {
 
 <style scoped>
 .ric-click { cursor: pointer; transition: border-color .15s; }
+.ri-defect-title { flex-basis: 100%; font-size: 10.5px; color: var(--text2); }
+.rg-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; margin-bottom: 6px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
+.rg-head:hover, .rg-head.open { border-color: var(--border2); }
+.rg-caret { font-size: 10px; color: var(--text3); width: 10px; }
+.rg-line { font-family: monospace; font-size: 14px; font-weight: 800; color: var(--text); }
+.rg-meta { font-size: 10px; color: var(--text3); }
+.rg-badge { margin-left: auto; }
+.rg-item { margin-left: 14px; }
 .ric-click:hover { border-color: var(--accent); }
 .ri-toggle { font-size: 11px; color: var(--text3); font-family: inherit; }
 .ri-defects { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border2); display: flex; flex-direction: column; gap: 5px; cursor: default; }

@@ -52,41 +52,72 @@ def _version_tuple(v: str | None) -> tuple[int, ...] | None:
 
 @router.get("/{version}/defects")
 async def release_defects(version: str, db: AsyncSession = Depends(get_db)):
-    """Real defects tied to this release, via DSD fixVersion or a linked VMS bug's fixVersion.
+    """Every bug fixed in this release, live from Jira (issuetype Bug with
+    this fixVersion), each marked with the customers who actually hit it
+    (via cases linked to the bug). The local VmsBug table only holds bugs
+    linked from customer cases, so listing from it alone showed most patch
+    releases as fixing nothing (confirmed 2026-10-08). Falls back to that
+    local subset — and says so — if Jira can't be reached.
 
-    `Release.version` is stored with a "-R" suffix ("8.30.1-R"); `VmsBug.fix_version`
-    never has one ("8.30.1") — comparing them directly was a silent no-op bug that
-    made this endpoint always return zero live defects. Normalize before comparing."""
+    `Release.version` carries a "-R" suffix ("8.30.1-R"); Jira fixVersion
+    names never do ("8.30.1"). Normalised before comparing."""
+    import httpx
+
+    from app.config import settings
+    from app.services.jira import _HEADERS, _auth
+
     release = (await db.execute(select(Release).where(Release.version == version))).scalar_one_or_none()
-
     normalized_version = version.replace("-R", "")
-    bugs = (await db.execute(select(VmsBug).where(VmsBug.fix_version == normalized_version))).scalars().all()
-    bug_refs = {b.jira_ref for b in bugs}
 
-    by_bug_cases = await cases_by_bug_ref(db, bug_refs) if bug_refs else {}
-    by_bug: dict[str, list[str]] = {
-        ref: [c.jira_customer_name or "Unknown" for c in cases_]
-        for ref, cases_ in by_bug_cases.items()
-    }
+    rows: list[dict] = []
+    source = "jira_live"
+    try:
+        if not settings.jira_enabled:
+            raise RuntimeError("Jira not configured")
+        token = None
+        async with httpx.AsyncClient(auth=_auth(), timeout=30, follow_redirects=True) as client:
+            while True:
+                params = {
+                    "jql": f'project = VMS AND issuetype = Bug AND fixVersion = "{normalized_version}" ORDER BY key DESC',
+                    "fields": "summary,status,customfield_10010", "maxResults": 100,
+                }
+                if token:
+                    params["nextPageToken"] = token
+                resp = await client.get(f"{settings.jira_base_url.rstrip('/')}/rest/api/3/search/jql",
+                                        headers=_HEADERS, params=params)
+                resp.raise_for_status()
+                body = resp.json()
+                for issue in body.get("issues", []):
+                    f = issue.get("fields", {})
+                    sprints = f.get("customfield_10010") or []
+                    sprint = sprints[-1] if isinstance(sprints, list) and sprints else None
+                    rows.append({
+                        "vms_ref": issue["key"], "title": f.get("summary"),
+                        "status": (f.get("status") or {}).get("name", ""),
+                        "sprint_name": sprint.get("name") if isinstance(sprint, dict) else None,
+                    })
+                token = body.get("nextPageToken")
+                if not token or body.get("isLast"):
+                    break
+    except Exception:
+        source = "local_fallback"
+        bugs = (await db.execute(select(VmsBug).where(VmsBug.fix_version == normalized_version))).scalars().all()
+        rows = [{"vms_ref": b.jira_ref, "title": None, "status": b.status, "sprint_name": b.sprint_name} for b in bugs]
 
+    by_bug_cases = await cases_by_bug_ref(db, {r["vms_ref"] for r in rows}) if rows else {}
     defects = [
-        {
-            "vms_ref": b.jira_ref,
-            "status": b.status,
-            "sprint_name": b.sprint_name,
-            "customers": sorted(set(by_bug.get(b.jira_ref, []))),
-        }
-        for b in bugs
+        {**r, "customers": sorted({c.jira_customer_name or "Unknown" for c in by_bug_cases.get(r["vms_ref"], [])})}
+        for r in rows
     ]
-    # Multi-customer-impact bugs first — the strongest signal in this data:
-    # a bug three different customers hit independently is not the same as
-    # one only a single customer ever reported.
-    defects.sort(key=lambda d: len(d["customers"]), reverse=True)
+    # Customer-impacting bugs first, then newest.
+    defects.sort(key=lambda d: (-len(d["customers"]), d["vms_ref"]), reverse=False)
 
     return {
         "version": version,
+        "source": source,
         "curated_defects_fixed": release.defects_fixed if release else None,
         "live_defect_count": len(defects),
+        "customer_reported_count": sum(1 for d in defects if d["customers"]),
         "defects": defects,
     }
 

@@ -3252,6 +3252,46 @@ async def check_upgrade_request_type_drift() -> list[dict]:
 _VERSION_NAME_RE = re.compile(r"^\d+\.\d+(\.\d+)?$")
 
 
+async def _jira_fix_version_counts(client: httpx.AsyncClient) -> tuple[dict[str, int], dict[str, int]] | None:
+    """Per fixVersion name: (bugs fixed, improvements shipped), counted
+    straight from Jira — every Done VMS issue with a fixVersion (~9k,
+    paginated). Bugs = issuetype Bug; improvements = everything else except
+    Sub-tasks (they'd double-count their parent). Replaces counting the
+    local VmsBug table, which only ever holds bugs linked from customer
+    cases — confirmed 2026-10-08 it showed 0 for patch releases that fix
+    1–8 bugs each in Jira (e.g. 8.31.2–8.31.8). None if Jira fails, so the
+    caller keeps the existing counts rather than zeroing them."""
+    bugs: dict[str, int] = {}
+    improvements: dict[str, int] = {}
+    token = None
+    try:
+        while True:
+            params = {"jql": "project = VMS AND statusCategory = Done AND fixVersion is not EMPTY",
+                      "fields": "issuetype,fixVersions", "maxResults": 100}
+            if token:
+                params["nextPageToken"] = token
+            resp = await client.get(f"{settings.jira_base_url.rstrip('/')}/rest/api/3/search/jql",
+                                    headers=_HEADERS, params=params)
+            resp.raise_for_status()
+            body = resp.json()
+            for issue in body.get("issues", []):
+                f = issue.get("fields", {})
+                kind = (f.get("issuetype") or {}).get("name", "")
+                if kind == "Sub-task":
+                    continue
+                target = bugs if kind == "Bug" else improvements
+                for fv in f.get("fixVersions") or []:
+                    name = (fv.get("name") or "").strip()
+                    target[name] = target.get(name, 0) + 1
+            token = body.get("nextPageToken")
+            if not token or body.get("isLast"):
+                break
+    except Exception as exc:
+        logger.warning("Fix-version count fetch failed: %s", exc)
+        return None
+    return bugs, improvements
+
+
 async def sync_release_versions_from_jira() -> dict:
     """On-demand — pulls the real project/VMS/versions objects from Jira
     and upserts a local Release row for every one that's actually released
@@ -3274,6 +3314,7 @@ async def sync_release_versions_from_jira() -> dict:
             )
             resp.raise_for_status()
             versions = resp.json()
+            fix_counts = await _jira_fix_version_counts(client)
     except Exception as exc:
         logger.warning("Release version sync failed: %s", exc)
         return {"synced": 0, "skipped_no_date": 0, "error": str(exc)}
@@ -3294,21 +3335,23 @@ async def sync_release_versions_from_jira() -> dict:
             version_str = f"{name}-R"
             existing = (await db.execute(select(Release).where(Release.version == version_str))).scalar_one_or_none()
 
-            defect_count = (
-                await db.execute(
-                    select(func.count(VmsBug.jira_ref)).where(VmsBug.fix_version == name, VmsBug.status == "Done")
-                )
-            ).scalar_one()
+            if fix_counts is not None:
+                defect_count = fix_counts[0].get(name, 0)
+                improvement_count = fix_counts[1].get(name, 0)
+            else:  # Jira count fetch failed — keep what's there rather than zeroing
+                defect_count = existing.defects_fixed if existing else 0
+                improvement_count = existing.improvements if existing else 0
 
             if existing:
                 existing.released_at = released_at
                 existing.defects_fixed = defect_count
+                existing.improvements = improvement_count
                 if v.get("description"):
                     existing.notes = v["description"]
             else:
                 db.add(Release(
                     version=version_str, released_at=released_at, defects_fixed=defect_count,
-                    improvements=0, notes=v.get("description") or "", is_latest=False,
+                    improvements=improvement_count, notes=v.get("description") or "", is_latest=False,
                 ))
             synced += 1
 
@@ -3323,7 +3366,7 @@ async def sync_release_versions_from_jira() -> dict:
 
         await db.commit()
 
-    return {"synced": synced, "skipped_no_date": skipped}
+    return {"synced": synced, "skipped_no_date": skipped, "fix_counts_from_jira": fix_counts is not None}
 
 
 async def sync_completed_upgrades() -> dict:

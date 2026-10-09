@@ -405,6 +405,22 @@ async def _cert_scan():
         logger.exception("Cert scan failed")
 
 
+async def _release_version_sync():
+    """Daily — the Releases section's Jira version sync, which used to run
+    only when someone clicked it (confirmed 2026-10-08: it had stopped at
+    8.31.4 while Jira already had 8.31.5–8.31.8 released). Read-only against
+    Jira; upserts local Release rows. Gated on Jira like every other
+    optional integration."""
+    from app.services.jira import sync_release_versions_from_jira
+
+    if not settings.jira_enabled:
+        return
+    try:
+        logger.info("Release version sync: %s", await sync_release_versions_from_jira())
+    except Exception:
+        logger.exception("Release version sync failed")
+
+
 async def _upgrade_request_type_drift_check():
     """Daily — real live re-check of every active, sys-admin-classified
     Upgrade row against its linked ticket's current Jira request_type (see
@@ -563,6 +579,13 @@ def init_scheduler():
         _upgrade_request_type_drift_check,
         trigger=CronTrigger(hour=2, minute=30),
         id="upgrade_request_type_drift_check",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        _release_version_sync,
+        trigger=CronTrigger(hour=2, minute=45),
+        id="release_version_sync",
         replace_existing=True,
     )
 
